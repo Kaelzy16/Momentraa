@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Momentra — Capture Every Moment</title>
+
+  <meta
+    name="description"
+    content="Momentra — Temukan, pilih, dan abadikan momen terbaikmu."
+  >
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap"
+    rel="stylesheet"
+  >
+
+  <style>
+
+    :root {
+      --bg: #080808;
+      --bg-soft: #101010;
+      --card: #141414;
+
+      --white: #f5f5f5;
+      --muted: #8c8c8c;
+      --dark-muted: #555;
+
+      --line: rgba(255,255,255,.09);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--white);
+
+      font-family: "DM Sans", sans-serif;
+
+      overflow-x: hidden;
+    }
+
+    ::selection {
+      background: white;
+      color: black;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+
+    /* ========================================
+       NAVBAR
+    ======================================== */
+
+    .navbar {
+
+      position: fixed;
+
+      top: 0;
+      left: 0;
+      right: 0;
+
+      height: 78px;
+
+      padding: 0 6%;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      z-index: 999;
+
+      background: rgba(8,8,8,.65);
+
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+
+
+    .logo {
+
+      font-size: 21px;
+
+      font-weight: 700;
+
+      letter-spacing: -1px;
+    }
+
+
+    .logo span {
+      color: #666;
+    }
+
+
+    .nav-links {
+
+      display: flex;
+
+      align-items: center;
+
+      gap: 10px;
+    }
+
+
+    .nav-links a {
+
+      font-size: 13px;
+
+      transition: .25s;
+    }
+
+
+    .nav-login {
+
+      border: 1px solid var(--line);
+
+      padding: 10px 17px;
+
+      border-radius: 8px;
+
+      color: white;
+    }
+
+
+    .nav-login:hover {
+
+      background: white;
+
+      color: black;
+    }
+
+
+    .nav-register {
+
+      background: white;
+
+      color: black;
+
+      padding: 10px 17px;
+
+      border-radius: 8px;
+    }
+
+
+    .nav-register:hover {
+      background: #ddd;
+    }
+
+
+    .menu {
+
+      display: none;
+
+      font-size: 24px;
+
+      cursor: pointer;
+
+      user-select: none;
+    }
+
+
+
+    /* ========================================
+       HERO
+    ======================================== */
+
+    .hero {
+
+      min-height: 100vh;
+
+      position: relative;
+
+      display: flex;
+
+      align-items: center;
+
+      padding: 140px 6% 90px;
+
+      overflow: hidden;
+    }
+
+
+    .hero-image {
+
+      position: absolute;
+
+      top: 0;
+      right: 0;
+
+      width: 58%;
+      height: 100%;
+
+      z-index: 0;
+    }
+
+
+    .hero-image img {
+
+      width: 100%;
+      height: 100%;
+
+      object-fit: cover;
+
+      opacity: .72;
+
+      filter: grayscale(25%);
+    }
+
+
+    .hero-image::after {
+
+      content: "";
+
+      position: absolute;
+
+      inset: 0;
+
+      background:
+
+        linear-gradient(
+          90deg,
+          var(--bg) 0%,
+          rgba(8,8,8,.9) 18%,
+          rgba(8,8,8,.3) 70%,
+          rgba(8,8,8,.2) 100%
+        ),
+
+        linear-gradient(
+          0deg,
+          var(--bg) 0%,
+          transparent 35%
+        );
+    }
+
+
+    .hero-content {
+
+      position: relative;
+
+      z-index: 2;
+
+      max-width: 720px;
+    }
+
+
+    .eyebrow {
+
+      display: flex;
+
+      align-items: center;
+
+      gap: 10px;
+
+      color: #999;
+
+      text-transform: uppercase;
+
+      letter-spacing: 3px;
+
+      font-size: 10px;
+
+      font-weight: 600;
+
+      margin-bottom: 28px;
+    }
+
+
+    .eyebrow::before {
+
+      content: "";
+
+      width: 28px;
+
+      height: 1px;
+
+      background: #777;
+    }
+
+
+    .hero h1 {
+
+      font-size: clamp(60px, 8vw, 110px);
+
+      line-height: .91;
+
+      letter-spacing: -6px;
+
+      font-weight: 600;
+
+      max-width: 800px;
+    }
+
+
+    .hero h1 em {
+
+      font-family: "Playfair Display", serif;
+
+      font-weight: 500;
+
+      color: #aaa;
+    }
+
+
+    .hero-description {
+
+      max-width: 480px;
+
+      color: #999;
+
+      font-size: 15px;
+
+      line-height: 1.8;
+
+      margin-top: 30px;
+    }
+
+
+    .hero-buttons {
+
+      display: flex;
+
+      gap: 12px;
+
+      margin-top: 35px;
+    }
+
+
+    .btn {
+
+      display: inline-flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      min-height: 46px;
+
+      padding: 0 21px;
+
+      border-radius: 7px;
+
+      font-size: 13px;
+
+      font-weight: 600;
+
+      transition: .3s;
+    }
+
+
+    .btn-white {
+
+      background: white;
+
+      color: black;
+    }
+
+
+    .btn-white:hover {
+
+      transform: translateY(-3px);
+
+      background: #ddd;
+    }
+
+
+    .btn-outline {
+
+      border: 1px solid var(--line);
+
+      color: white;
+    }
+
+
+    .btn-outline:hover {
+
+      background: rgba(255,255,255,.08);
+    }
+
+
+    .hero-scroll {
+
+      position: absolute;
+
+      bottom: 35px;
+
+      left: 6%;
+
+      color: #666;
+
+      font-size: 10px;
+
+      letter-spacing: 2px;
+
+      text-transform: uppercase;
+
+      display: flex;
+
+      align-items: center;
+
+      gap: 12px;
+    }
+
+
+    .hero-scroll::after {
+
+      content: "";
+
+      width: 50px;
+
+      height: 1px;
+
+      background: #444;
+    }
+
+
+
+    /* ========================================
+       SECTIONS
+    ======================================== */
+
+    section {
+
+      padding: 120px 6%;
+    }
+
+
+    .section-top {
+
+      display: flex;
+
+      align-items: flex-end;
+
+      justify-content: space-between;
+
+      gap: 30px;
+
+      margin-bottom: 55px;
+    }
+
+
+    .section-label {
+
+      color: #666;
+
+      font-size: 10px;
+
+      font-weight: 600;
+
+      letter-spacing: 3px;
+
+      text-transform: uppercase;
+
+      margin-bottom: 13px;
+    }
+
+
+    .section-title {
+
+      font-size: clamp(38px, 5vw, 65px);
+
+      line-height: 1;
+
+      letter-spacing: -3px;
+
+      font-weight: 600;
+    }
+
+
+    .section-description {
+
+      max-width: 390px;
+
+      color: #777;
+
+      font-size: 13px;
+
+      line-height: 1.8;
+    }
+
+
+
+    /* ========================================
+       FEATURED PHOTOS
+    ======================================== */
+
+    .photo-grid {
+
+      display: grid;
+
+      grid-template-columns: 1.4fr 1fr 1fr;
+
+      grid-template-rows: 270px 270px;
+
+      gap: 12px;
+    }
+
+
+    .photo-card {
+
+      position: relative;
+
+      overflow: hidden;
+
+      background: #111;
+    }
+
+
+    .photo-card:first-child {
+
+      grid-row: span 2;
+    }
+
+
+    .photo-card img {
+
+      width: 100%;
+
+      height: 100%;
+
+      object-fit: cover;
+
+      transition: transform .7s ease;
+    }
+
+
+    .photo-card:hover img {
+
+      transform: scale(1.06);
+    }
+
+
+    .photo-card::after {
+
+      content: "";
+
+      position: absolute;
+
+      inset: 0;
+
+      background:
+
+        linear-gradient(
+          transparent 45%,
+          rgba(0,0,0,.85)
+        );
+    }
+
+
+    .photo-info {
+
+      position: absolute;
+
+      left: 20px;
+
+      right: 20px;
+
+      bottom: 18px;
+
+      z-index: 2;
+    }
+
+
+    .photo-info small {
+
+      color: #aaa;
+
+      font-size: 9px;
+
+      letter-spacing: 2px;
+
+      text-transform: uppercase;
+    }
+
+
+    .photo-info h3 {
+
+      font-size: 16px;
+
+      margin-top: 6px;
+    }
+
+
+
+    /* ========================================
+       EVENTS
+    ======================================== */
+
+    .events {
+
+      display: grid;
+
+      grid-template-columns: repeat(3, 1fr);
+
+      gap: 15px;
+    }
+
+
+    .event {
+
+      border: 1px solid var(--line);
+
+      background: #0d0d0d;
+
+      transition: .3s;
+    }
+
+
+    .event:hover {
+
+      border-color: rgba(255,255,255,.2);
+
+      transform: translateY(-5px);
+    }
+
+
+    .event-image {
+
+      height: 250px;
+
+      overflow: hidden;
+    }
+
+
+    .event-image img {
+
+      width: 100%;
+
+      height: 100%;
+
+      object-fit: cover;
+
+      transition: .6s;
+    }
+
+
+    .event:hover img {
+
+      transform: scale(1.05);
+    }
+
+
+    .event-content {
+
+      padding: 23px;
+    }
+
+
+    .event-meta {
+
+      display: flex;
+
+      justify-content: space-between;
+
+      color: #666;
+
+      font-size: 10px;
+
+      text-transform: uppercase;
+
+      letter-spacing: 1px;
+    }
+
+
+    .event h3 {
+
+      margin-top: 13px;
+
+      font-size: 20px;
+
+      letter-spacing: -.5px;
+    }
+
+
+    .event p {
+
+      color: #777;
+
+      font-size: 12px;
+
+      line-height: 1.7;
+
+      margin-top: 9px;
+    }
+
+
+    .event-link {
+
+      display: inline-block;
+
+      margin-top: 18px;
+
+      font-size: 12px;
+
+      font-weight: 600;
+
+      color: #ddd;
+    }
+
+
+
+    /* ========================================
+       HOW IT WORKS
+    ======================================== */
+
+    .process {
+
+      border-top: 1px solid var(--line);
+    }
+
+
+    .process-item {
+
+      display: grid;
+
+      grid-template-columns: 100px 1fr 1fr;
+
+      gap: 30px;
+
+      padding: 35px 0;
+
+      border-bottom: 1px solid var(--line);
+
+      align-items: center;
+    }
+
+
+    .process-number {
+
+      color: #555;
+
+      font-size: 13px;
+    }
+
+
+    .process-item h3 {
+
+      font-size: 23px;
+
+      letter-spacing: -1px;
+    }
+
+
+    .process-item p {
+
+      color: #777;
+
+      font-size: 13px;
+
+      line-height: 1.7;
+
+      max-width: 420px;
+    }
+
+
+
+    /* ========================================
+       FINAL CTA
+    ======================================== */
+
+    .final-cta {
+
+      position: relative;
+
+      overflow: hidden;
+
+      min-height: 450px;
+
+      display: flex;
+
+      align-items: center;
+
+      padding: 70px;
+
+      background:
+
+        linear-gradient(
+          90deg,
+          rgba(0,0,0,.95),
+          rgba(0,0,0,.55)
+        ),
+
+        url(
+          "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1600&q=85"
+        );
+
+      background-size: cover;
+
+      background-position: center;
+    }
+
+
+    .final-cta-content {
+
+      max-width: 650px;
+    }
+
+
+    .final-cta h2 {
+
+      font-size: clamp(45px, 6vw, 75px);
+
+      line-height: .95;
+
+      letter-spacing: -4px;
+    }
+
+
+    .final-cta p {
+
+      color: #aaa;
+
+      font-size: 14px;
+
+      line-height: 1.8;
+
+      max-width: 500px;
+
+      margin-top: 22px;
+    }
+
+
+    .final-cta .btn {
+
+      margin-top: 30px;
+    }
+
+
+
+    /* ========================================
+       FOOTER
+    ======================================== */
+
+    footer {
+
+      padding: 50px 6% 30px;
+
+      border-top: 1px solid var(--line);
+    }
+
+
+    .footer-main {
+
+      display: flex;
+
+      align-items: flex-start;
+
+      justify-content: space-between;
+
+      gap: 30px;
+
+      padding-bottom: 50px;
+    }
+
+
+    .footer-brand p {
+
+      color: #666;
+
+      font-size: 12px;
+
+      margin-top: 10px;
+    }
+
+
+    .footer-links {
+
+      display: flex;
+
+      gap: 55px;
+    }
+
+
+    .footer-column h4 {
+
+      color: #555;
+
+      font-size: 10px;
+
+      text-transform: uppercase;
+
+      letter-spacing: 2px;
+
+      margin-bottom: 15px;
+    }
+
+
+    .footer-column a {
+
+      display: block;
+
+      color: #888;
+
+      font-size: 12px;
+
+      margin-bottom: 9px;
+
+      transition: .2s;
+    }
+
+
+    .footer-column a:hover {
+
+      color: white;
+    }
+
+
+    .footer-bottom {
+
+      padding-top: 25px;
+
+      border-top: 1px solid var(--line);
+
+      display: flex;
+
+      justify-content: space-between;
+
+      color: #444;
+
+      font-size: 11px;
+    }
+
+
+
+    /* ========================================
+       MOBILE
+    ======================================== */
+
+    @media (max-width: 850px) {
+
+      .navbar {
+
+        height: 68px;
+      }
+
+
+      .menu {
+
+        display: block;
+      }
+
+
+      .nav-links {
+
+        position: absolute;
+
+        top: 68px;
+
+        left: 5%;
+
+        right: 5%;
+
+        display: none;
+
+        flex-direction: column;
+
+        gap: 8px;
+
+        padding: 12px;
+
+        background: #111;
+
+        border: 1px solid var(--line);
+
+        border-radius: 10px;
+
+        box-shadow: 0 20px 50px rgba(0,0,0,.4);
+      }
+
+
+      .nav-links.active {
+
+        display: flex;
+      }
+
+
+      .nav-links a {
+
+        width: 100%;
+
+        text-align: center;
+
+        padding: 13px;
+      }
+
+
+      .hero {
+
+        min-height: 850px;
+
+        padding-top: 130px;
+
+        align-items: flex-start;
+      }
+
+
+      .hero-image {
+
+        width: 100%;
+
+        height: 65%;
+
+        top: auto;
+
+        bottom: 0;
+      }
+
+
+      .hero-image::after {
+
+        background:
+
+          linear-gradient(
+            0deg,
+            var(--bg) 0%,
+            rgba(8,8,8,.3) 60%,
+            rgba(8,8,8,.6) 100%
+          );
+      }
+
+
+      .hero h1 {
+
+        font-size: clamp(55px, 15vw, 80px);
+
+        letter-spacing: -4px;
+      }
+
+
+      .hero-description {
+
+        font-size: 14px;
+      }
+
+
+      .hero-scroll {
+
+        display: none;
+      }
+
+
+      section {
+
+        padding: 85px 5%;
+      }
+
+
+      .section-top {
+
+        display: block;
+      }
+
+
+      .section-description {
+
+        margin-top: 20px;
+      }
+
+
+      .photo-grid {
+
+        display: grid;
+
+        grid-template-columns: 1fr 1fr;
+
+        grid-template-rows:
+          250px
+          190px
+          190px;
+      }
+
+
+      .photo-card:first-child {
+
+        grid-column: span 2;
+
+        grid-row: span 1;
+      }
+
+
+      .events {
+
+        grid-template-columns: 1fr;
+      }
+
+
+      .event-image {
+
+        height: 280px;
+      }
+
+
+      .process-item {
+
+        grid-template-columns: 45px 1fr;
+
+        gap: 15px;
+      }
+
+
+      .process-item p {
+
+        grid-column: 2;
+      }
+
+
+      .final-cta {
+
+        min-height: 500px;
+
+        padding: 45px 25px;
+      }
+
+
+      .footer-main {
+
+        display: block;
+      }
+
+
+      .footer-links {
+
+        margin-top: 40px;
+
+        gap: 35px;
+      }
+
+
+      .footer-bottom {
+
+        display: block;
+      }
+
+
+      .footer-bottom span {
+
+        display: block;
+
+        margin-top: 8px;
+      }
+
+    }
+
+
+
+    /* ========================================
+       SMALL MOBILE
+    ======================================== */
+
+    @media (max-width: 480px) {
+
+      .hero-buttons {
+
+        flex-direction: column;
+
+        align-items: flex-start;
+      }
+
+
+      .hero-buttons .btn {
+
+        width: 100%;
+      }
+
+
+      .photo-grid {
+
+        grid-template-columns: 1fr;
+
+        grid-template-rows:
+          300px
+          200px
+          200px
+          200px
+          200px;
+      }
+
+
+      .photo-card:first-child {
+
+        grid-column: span 1;
+      }
+
+
+      .photo-card {
+
+        grid-column: span 1 !important;
+      }
+
+
+      .footer-links {
+
+        flex-wrap: wrap;
+      }
+
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <!-- ========================================
+       NAVBAR
+  ======================================== -->
+
+  <nav class="navbar">
+
+    <a href="#" class="logo">
+      momentra<span>.</span>
+    </a>
+
+
+    <div class="nav-links" id="navLinks">
+
+      <a href="login.html" class="nav-login">
+        Masuk
+      </a>
+
+      <a href="register.html" class="nav-register">
+        Daftar
+      </a>
+
+    </div>
+
+
+    <div class="menu" id="menuToggle">
+      ☰
+    </div>
+
+  </nav>
+
+
+
+  <!-- ========================================
+       HERO
+  ======================================== -->
+
+  <header class="hero">
+
+
+    <div class="hero-image">
+
+      <img
+        src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1800&q=90"
+        alt="Momentra Event"
+      >
+
+    </div>
+
+
+    <div class="hero-content">
+
+
+      <div class="eyebrow">
+        Momentra Photography
+      </div>
+
+
+      <h1>
+
+        Your moment.
+        <em>Your story.</em>
+
+      </h1>
+
+
+      <p class="hero-description">
+
+        Platform untuk menemukan foto dari event,
+        pertandingan, dan momen spesial yang pernah
+        kamu lewatkan.
+
+      </p>
+
+
+      <div class="hero-buttons">
+
+        <a href="#explore" class="btn btn-white">
+          Explore Moments →
+        </a>
+
+        <a href="login.html" class="btn btn-outline">
+          Masuk
+        </a>
+
+      </div>
+
+
+    </div>
+
+
+    <div class="hero-scroll">
+      Scroll to explore
+    </div>
+
+
+  </header>
+
+
+
+  <!-- ========================================
+       FEATURED
+  ======================================== -->
+
+  <section id="explore">
+
+
+    <div class="section-top">
+
+
+      <div>
+
+        <div class="section-label">
+          Featured
+        </div>
+
+
+        <h2 class="section-title">
+
+          Moments worth<br>
+          remembering.
+
+        </h2>
+
+      </div>
+
+
+      <p class="section-description">
+
+        Momen terbaik tidak selalu bisa diulang.
+        Temukan foto yang mengabadikannya dan
+        simpan ceritanya.
+
+      </p>
+
+
+    </div>
+
+
+
+    <div class="photo-grid">
+
+
+      <div class="photo-card">
+
+        <img
+          src="https://images.unsplash.com/photo-1517457210348-703079e57d4b?auto=format&fit=crop&w=1200&q=85"
+          alt="Event photo"
+        >
+
+
+        <div class="photo-info">
+
+          <small>
+            School Championship
+          </small>
+
+          <h3>
+            The Winning Moment
+          </h3>
+
+        </div>
+
+      </div>
+
+
+
+      <div class="photo-card">
+
+        <img
+          src="https://images.unsplash.com/photo-1526676037777-05a232554f77?auto=format&fit=crop&w=900&q=85"
+          alt="Basketball"
+        >
+
+
+        <div class="photo-info">
+
+          <small>
+            Basketball
+          </small>
+
+          <h3>
+            Game Time
+          </h3>
+
+        </div>
+
+      </div>
+
+
+
+      <div class="photo-card">
+
+        <img
+          src="https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=900&q=85"
+          alt="Running"
+        >
+
+
+        <div class="photo-info">
+
+          <small>
+            Sports
+          </small>
+
+          <h3>
+            Full Speed
+          </h3>
+
+        </div>
+
+      </div>
+
+
+
+      <div class="photo-card">
+
+        <img
+          src="https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=900&q=85"
+          alt="Festival"
+        >
+
+
+        <div class="photo-info">
+
+          <small>
+            Festival
+          </small>
+
+          <h3>
+            After Sunset
+          </h3>
+
+        </div>
+
+      </div>
+
+
+
+      <div class="photo-card">
+
+        <img
+          src="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=900&q=85"
+          alt="Concert"
+        >
+
+
+        <div class="photo-info">
+
+          <small>
+            Event
+          </small>
+
+          <h3>
+            One Night
+          </h3>
+
+        </div>
+
+      </div>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- ========================================
+       EVENTS
+  ======================================== -->
+
+  <section id="event">
+
+
+    <div class="section-top">
+
+
+      <div>
+
+        <div class="section-label">
+          Discover
+        </div>
+
+
+        <h2 class="section-title">
+          Latest events.
+        </h2>
+
+      </div>
+
+
+      <p class="section-description">
+
+        Jelajahi event terbaru dan cari apakah
+        ada momenmu di dalamnya.
+
+      </p>
+
+
+    </div>
+
+
+
+    <div class="events">
+
+
+      <article class="event">
+
+
+        <div class="event-image">
+
+          <img
+            src="https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=1000&q=85"
+            alt="Football event"
+          >
+
+        </div>
+
+
+        <div class="event-content">
+
+
+          <div class="event-meta">
+
+            <span>
+              Sports
+            </span>
+
+            <span>
+              2026
+            </span>
+
+          </div>
+
+
+          <h3>
+            School Football Cup
+          </h3>
+
+
+          <p>
+
+            Kumpulan momen pertandingan
+            antar sekolah.
+
+          </p>
+
+
+          <a href="#" class="event-link">
+            View event →
+          </a>
+
+
+        </div>
+
+
+      </article>
+
+
+
+      <article class="event">
+
+
+        <div class="event-image">
+
+          <img
+            src="https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1000&q=85"
+            alt="Basketball event"
+          >
+
+        </div>
+
+
+        <div class="event-content">
+
+
+          <div class="event-meta">
+
+            <span>
+              Basketball
+            </span>
+
+            <span>
+              2026
+            </span>
+
+          </div>
+
+
+          <h3>
+            Basketball Championship
+          </h3>
+
+
+          <p>
+
+            Aksi terbaik dari setiap
+            pertandingan.
+
+          </p>
+
+
+          <a href="#" class="event-link">
+            View event →
+          </a>
+
+
+        </div>
+
+
+      </article>
+
+
+
+      <article class="event">
+
+
+        <div class="event-image">
+
+          <img
+            src="https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1000&q=85"
+            alt="School festival"
+          >
+
+        </div>
+
+
+        <div class="event-content">
+
+
+          <div class="event-meta">
+
+            <span>
+              School
+            </span>
+
+            <span>
+              2026
+            </span>
+
+          </div>
+
+
+          <h3>
+            School Festival
+          </h3>
+
+
+          <p>
+
+            Momen terbaik dari seluruh
+            rangkaian acara.
+
+          </p>
+
+
+          <a href="#" class="event-link">
+            View event →
+          </a>
+
+
+        </div>
+
+
+      </article>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- ========================================
+       HOW IT WORKS
+  ======================================== -->
+
+  <section id="cara-kerja">
+
+
+    <div class="section-top">
+
+
+      <div>
+
+        <div class="section-label">
+          Process
+        </div>
+
+
+        <h2 class="section-title">
+          Find your moment.
+        </h2>
+
+      </div>
+
+
+      <p class="section-description">
+
+        Kami membuat proses menemukan foto
+        menjadi sederhana.
+
+      </p>
+
+
+    </div>
+
+
+
+    <div class="process">
+
+
+      <div class="process-item">
+
+        <div class="process-number">
+          01
+        </div>
+
+
+        <h3>
+          Choose an event
+        </h3>
+
+
+        <p>
+
+          Cari event atau pertandingan yang
+          ingin kamu lihat koleksi fotonya.
+
+        </p>
+
+      </div>
+
+
+
+      <div class="process-item">
+
+        <div class="process-number">
+          02
+        </div>
+
+
+        <h3>
+          Find your photo
+        </h3>
+
+
+        <p>
+
+          Jelajahi foto yang tersedia dan
+          temukan momen yang paling berarti.
+
+        </p>
+
+      </div>
+
+
+
+      <div class="process-item">
+
+        <div class="process-number">
+          03
+        </div>
+
+
+        <h3>
+          Keep the memory
+        </h3>
+
+
+        <p>
+
+          Pilih foto favoritmu dan simpan
+          sebagai kenangan.
+
+        </p>
+
+      </div>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- ========================================
+       FINAL CTA
+  ======================================== -->
+
+  <section>
+
+
+    <div class="final-cta">
+
+
+      <div class="final-cta-content">
+
+
+        <div class="section-label">
+          Your memories
+        </div>
+
+
+        <h2>
+
+          Some moments
+          deserve to stay.
+
+        </h2>
+
+
+        <p>
+
+          Temukan kembali momen terbaikmu.
+          Cari event, lihat foto, dan simpan
+          cerita yang tidak ingin kamu lupakan.
+
+        </p>
+
+
+        <a href="register.html" class="btn btn-white">
+          Mulai Sekarang →
+        </a>
+
+
+      </div>
+
+
+    </div>
+
+
+  </section>
+
+
+
+  <!-- ========================================
+       FOOTER
+  ======================================== -->
+
+  <footer>
+
+
+    <div class="footer-main">
+
+
+      <div class="footer-brand">
+
+
+        <div class="logo">
+          momentra<span>.</span>
+        </div>
+
+
+        <p>
+          Capture. Find. Remember.
+        </p>
+
+
+      </div>
+
+
+
+      <div class="footer-links">
+
+
+        <div class="footer-column">
+
+
+          <h4>
+            Explore
+          </h4>
+
+
+          <a href="#explore">
+            Featured
+          </a>
+
+
+          <a href="#event">
+            Events
+          </a>
+
+
+        </div>
+
+
+
+        <div class="footer-column">
+
+
+          <h4>
+            Momentra
+          </h4>
+
+
+          <a href="#cara-kerja">
+            Cara Kerja
+          </a>
+
+
+        </div>
+
+
+
+        <div class="footer-column">
+
+
+          <h4>
+            Account
+          </h4>
+
+
+          <a href="login.html">
+            Masuk
+          </a>
+
+
+          <a href="register.html">
+            Daftar
+          </a>
+
+
+        </div>
+
+
+      </div>
+
+
+    </div>
+
+
+
+    <div class="footer-bottom">
+
+
+      <span>
+        © 2026 Momentra. All rights reserved.
+      </span>
+
+
+      <span>
+        Made for moments.
+      </span>
+
+
+    </div>
+
+
+  </footer>
+
+
+
+  <!-- ========================================
+       JAVASCRIPT
+  ======================================== -->
+
+  <script>
+
+    const menuToggle =
+      document.getElementById("menuToggle");
+
+    const navLinks =
+      document.getElementById("navLinks");
+
+
+    menuToggle.addEventListener("click", () => {
+
+      navLinks.classList.toggle("active");
+
+    });
+
+
+    document
+      .querySelectorAll(".nav-links a")
+      .forEach(link => {
+
+        link.addEventListener("click", () => {
+
+          navLinks.classList.remove("active");
+
+        });
+
+      });
+
+  </script>
+
+
+</body>
+</html>

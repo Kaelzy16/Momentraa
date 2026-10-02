@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Masuk — Momentra</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #080808;
+      --bg-soft: #101010;
+      --card: #141414;
+      --white: #f5f5f5;
+      --muted: #8c8c8c;
+      --dark-muted: #555;
+      --line: rgba(255,255,255,.09);
+      --success: #75d99a;
+      --danger: #ff7777;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: "DM Sans", sans-serif;
+      background: var(--bg);
+      color: var(--white);
+      min-height: 100vh;
+    }
+
+    button,
+    input {
+      font-family: inherit;
+    }
+
+    /* ================= NAVBAR ================= */
+
+    .navbar {
+      height: 78px;
+      width: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      padding: 0 6%;
+
+      background: rgba(8,8,8,.72);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .logo {
+      color: var(--white);
+      text-decoration: none;
+      font-size: 25px;
+      font-weight: 700;
+      letter-spacing: -1.2px;
+    }
+
+    .logo span {
+      color: #777;
+    }
+
+    .back-home {
+      color: #999;
+      text-decoration: none;
+      font-size: 14px;
+      transition: .25s;
+    }
+
+    .back-home:hover {
+      color: var(--white);
+    }
+
+    /* ================= MAIN ================= */
+
+    .login-page {
+      min-height: 100vh;
+      padding-top: 78px;
+
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    /* ================= IMAGE SIDE ================= */
+
+    .visual {
+      position: relative;
+      min-height: calc(100vh - 78px);
+      overflow: hidden;
+
+      background:
+        linear-gradient(
+          to top,
+          rgba(0,0,0,.88),
+          rgba(0,0,0,.15)
+        ),
+        url("https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=1400&q=85")
+        center / cover;
+    }
+
+    .visual::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+
+      background:
+        linear-gradient(
+          90deg,
+          rgba(0,0,0,.05),
+          rgba(0,0,0,.2)
+        );
+    }
+
+    .visual-content {
+      position: absolute;
+      z-index: 2;
+      left: 8%;
+      right: 8%;
+      bottom: 9%;
+    }
+
+    .visual-label {
+      color: #aaa;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 18px;
+    }
+
+    .visual h1 {
+      max-width: 520px;
+
+      font-family: "Playfair Display", serif;
+      font-size: clamp(42px, 5vw, 70px);
+      line-height: 1.03;
+      font-weight: 500;
+      letter-spacing: -2px;
+    }
+
+    .visual h1 em {
+      color: #aaa;
+    }
+
+    .visual p {
+      max-width: 430px;
+      margin-top: 22px;
+
+      color: #aaa;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* ================= FORM SIDE ================= */
+
+    .form-side {
+      min-height: calc(100vh - 78px);
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      padding: 70px 9%;
+
+      background: var(--bg);
+    }
+
+    .form-container {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .form-header {
+      margin-bottom: 36px;
+    }
+
+    .form-header .eyebrow {
+      color: #777;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 13px;
+    }
+
+    .form-header h2 {
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 10px;
+    }
+
+    .form-header p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ================= FORM ================= */
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 9px;
+
+      font-size: 13px;
+      font-weight: 500;
+      color: #ccc;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .form-group input {
+      width: 100%;
+      height: 52px;
+
+      border: 1px solid var(--line);
+      border-radius: 7px;
+
+      outline: none;
+
+      padding: 0 15px;
+
+      background: #101010;
+      color: var(--white);
+
+      font-size: 14px;
+
+      transition: .25s;
+    }
+
+    .form-group input::placeholder {
+      color: #4f4f4f;
+    }
+
+    .form-group input:focus {
+      border-color: rgba(255,255,255,.35);
+      background: #121212;
+    }
+
+    .password-toggle {
+      position: absolute;
+      top: 50%;
+      right: 15px;
+
+      transform: translateY(-50%);
+
+      border: none;
+      background: none;
+
+      color: #666;
+      cursor: pointer;
+
+      font-size: 13px;
+    }
+
+    .password-toggle:hover {
+      color: #aaa;
+    }
+
+    /* ================= OPTIONS ================= */
+
+    .form-options {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      margin: 4px 0 25px;
+    }
+
+    .remember {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      color: #777;
+      font-size: 12px;
+
+      cursor: pointer;
+    }
+
+    .remember input {
+      width: 14px;
+      height: 14px;
+      accent-color: white;
+      cursor: pointer;
+    }
+
+    .forgot {
+      color: #aaa;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .forgot:hover {
+      color: white;
+    }
+
+    /* ================= BUTTON ================= */
+
+    .submit-btn {
+      width: 100%;
+      height: 53px;
+
+      border: none;
+      border-radius: 7px;
+
+      background: var(--white);
+      color: #080808;
+
+      font-size: 14px;
+      font-weight: 700;
+
+      cursor: pointer;
+
+      transition: .25s;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .submit-btn:hover {
+      background: #dcdcdc;
+      transform: translateY(-1px);
+    }
+
+    .submit-btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ================= SPINNER ================= */
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+
+      border: 2px solid rgba(0,0,0,.25);
+      border-top-color: #000;
+
+      border-radius: 50%;
+
+      animation: spin .7s linear infinite;
+
+      display: none;
+    }
+
+    .loading .spinner {
+      display: block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ================= MESSAGE ================= */
+
+    .message {
+      display: none;
+
+      margin-top: 18px;
+      padding: 13px 14px;
+
+      border-radius: 6px;
+
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .message.error {
+      display: block;
+
+      color: var(--danger);
+      background: rgba(255,70,70,.07);
+      border: 1px solid rgba(255,70,70,.14);
+    }
+
+    .message.success {
+      display: block;
+
+      color: var(--success);
+      background: rgba(70,255,140,.06);
+      border: 1px solid rgba(70,255,140,.12);
+    }
+
+    /* ================= REGISTER ================= */
+
+    .register-link {
+      margin-top: 28px;
+
+      text-align: center;
+
+      color: #666;
+      font-size: 13px;
+    }
+
+    .register-link a {
+      color: #ddd;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .register-link a:hover {
+      color: white;
+    }
+
+    /* ================= DIVIDER ================= */
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+
+      margin: 28px 0;
+    }
+
+    .divider span {
+      height: 1px;
+      flex: 1;
+      background: var(--line);
+    }
+
+    .divider p {
+      color: #555;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ================= MOBILE ================= */
+
+    @media (max-width: 850px) {
+
+      .navbar {
+        height: 68px;
+        padding: 0 5%;
+      }
+
+      .login-page {
+        grid-template-columns: 1fr;
+        padding-top: 68px;
+      }
+
+      .visual {
+        min-height: 360px;
+        height: 43vh;
+      }
+
+      .visual-content {
+        left: 7%;
+        right: 7%;
+        bottom: 9%;
+      }
+
+      .visual h1 {
+        font-size: 43px;
+      }
+
+      .visual p {
+        display: none;
+      }
+
+      .form-side {
+        min-height: auto;
+        padding: 55px 7% 70px;
+      }
+    }
+
+    @media (max-width: 480px) {
+
+      .logo {
+        font-size: 23px;
+      }
+
+      .back-home {
+        font-size: 13px;
+      }
+
+      .visual {
+        min-height: 300px;
+      }
+
+      .visual h1 {
+        font-size: 38px;
+        letter-spacing: -1.5px;
+      }
+
+      .visual-label {
+        font-size: 10px;
+        margin-bottom: 12px;
+      }
+
+      .form-side {
+        padding: 45px 6% 60px;
+      }
+
+      .form-header h2 {
+        font-size: 30px;
+      }
+
+      .form-options {
+        gap: 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+
+    <a href="index.html" class="logo">
+      momentra<span>.</span>
+    </a>
+
+    <a href="index.html" class="back-home">
+      ← Kembali
+    </a>
+
+  </header>
+
+
+  <!-- LOGIN PAGE -->
+  <main class="login-page">
+
+    <!-- VISUAL -->
+    <section class="visual">
+
+      <div class="visual-content">
+
+        <div class="visual-label">
+          Welcome back to Momentra
+        </div>
+
+        <h1>
+          Your moments<br>
+          <em>are waiting.</em>
+        </h1>
+
+        <p>
+          Masuk ke akunmu untuk menemukan kembali
+          foto-foto terbaik dari setiap momen.
+        </p>
+
+      </div>
+
+    </section>
+
+
+    <!-- FORM -->
+    <section class="form-side">
+
+      <div class="form-container">
+
+        <div class="form-header">
+
+          <div class="eyebrow">
+            Account
+          </div>
+
+          <h2>
+            Selamat datang kembali.
+          </h2>
+
+          <p>
+            Masukkan email dan password untuk melanjutkan.
+          </p>
+
+        </div>
+
+
+        <form id="loginForm">
+
+          <!-- EMAIL -->
+          <div class="form-group">
+
+            <label for="email">
+              Email
+            </label>
+
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="nama@email.com"
+              autocomplete="email"
+              required
+            >
+
+          </div>
+
+
+          <!-- PASSWORD -->
+          <div class="form-group">
+
+            <label for="password">
+              Password
+            </label>
+
+            <div class="input-wrapper">
+
+              <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder="Masukkan password"
+                autocomplete="current-password"
+                required
+              >
+
+              <button
+                type="button"
+                class="password-toggle"
+                id="togglePassword"
+              >
+                Lihat
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <!-- OPTIONS -->
+          <div class="form-options">
+
+            <label class="remember">
+
+              <input
+                type="checkbox"
+                id="remember"
+              >
+
+              Ingat saya
+
+            </label>
+
+            <a href="#" class="forgot" id="forgotPassword">
+              Lupa password?
+            </a>
+
+          </div>
+
+
+          <!-- SUBMIT -->
+          <button
+            type="submit"
+            class="submit-btn"
+            id="loginButton"
+          >
+
+            <span class="spinner"></span>
+
+            <span id="buttonText">
+              Masuk
+            </span>
+
+          </button>
+
+        </form>
+
+
+        <!-- MESSAGE -->
+        <div
+          class="message"
+          id="message"
+        ></div>
+
+
+        <div class="divider">
+          <span></span>
+          <p>atau</p>
+          <span></span>
+        </div>
+
+
+        <!-- REGISTER -->
+        <div class="register-link">
+
+          Belum punya akun?
+          <a href="register.html">
+            Daftar sekarang
+          </a>
+
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <script>
+
+    /* ==========================================
+       MOMENTRA API
+    ========================================== */
+
+    const API_BASE =
+      "https://momentra-api.christopoluan841.workers.dev";
+
+
+    /* ==========================================
+       ELEMENTS
+    ========================================== */
+
+    const loginForm =
+      document.getElementById("loginForm");
+
+    const loginButton =
+      document.getElementById("loginButton");
+
+    const buttonText =
+      document.getElementById("buttonText");
+
+    const message =
+      document.getElementById("message");
+
+    const passwordInput =
+      document.getElementById("password");
+
+    const togglePassword =
+      document.getElementById("togglePassword");
+
+
+    /* ==========================================
+       PASSWORD TOGGLE
+    ========================================== */
+
+    togglePassword.addEventListener("click", () => {
+
+      if (passwordInput.type === "password") {
+
+        passwordInput.type = "text";
+
+        togglePassword.textContent = "Sembunyikan";
+
+      } else {
+
+        passwordInput.type = "password";
+
+        togglePassword.textContent = "Lihat";
+
+      }
+
+    });
+
+
+    /* ==========================================
+       MESSAGE
+    ========================================== */
+
+    function showMessage(text, type) {
+
+      message.textContent = text;
+
+      message.className =
+        "message " + type;
+
+    }
+
+
+    function clearMessage() {
+
+      message.textContent = "";
+
+      message.className =
+        "message";
+
+    }
+
+
+    /* ==========================================
+       LOGIN
+    ========================================== */
+
+    loginForm.addEventListener("submit", async (event) => {
+
+      event.preventDefault();
+
+      clearMessage();
+
+
+      const email =
+        document.getElementById("email")
+        .value
+        .trim();
+
+      const password =
+        passwordInput.value;
+
+
+      if (!email || !password) {
+
+        showMessage(
+          "Email dan password wajib diisi.",
+          "error"
+        );
+
+        return;
+
+      }
+
+
+      /* Loading */
+
+      loginButton.disabled = true;
+
+      loginButton.classList.add("loading");
+
+      buttonText.textContent =
+        "Memproses...";
+
+
+      try {
+
+        const response = await fetch(
+          `${API_BASE}/api/auth/login`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+              email: email,
+              password: password
+            })
+          }
+        );
+
+
+        const data = await response.json()
+          .catch(() => ({}));
+
+
+        if (!response.ok) {
+
+          throw new Error(
+            data.message ||
+            data.error ||
+            "Email atau password salah."
+          );
+
+        }
+
+
+        /*
+          Backend diharapkan mengembalikan:
+
+          {
+            token: "...",
+            user: {
+              id: "...",
+              name: "...",
+              email: "...",
+              role: "user"
+            }
+          }
+        */
+
+        const token =
+          data.token ||
+          data.access_token ||
+          data.accessToken;
+
+        const user =
+          data.user ||
+          data.data;
+
+
+        if (!token) {
+
+          throw new Error(
+            "Login berhasil tetapi token tidak ditemukan dari server."
+          );
+
+        }
+
+
+        /* Simpan session */
+
+        localStorage.setItem(
+          "momentra_token",
+          token
+        );
+
+
+        if (user) {
+
+          localStorage.setItem(
+            "momentra_user",
+            JSON.stringify(user)
+          );
+
+        }
+
+
+        localStorage.setItem(
+          "momentra_logged_in",
+          "true"
+        );
+
+
+        /* Remember me */
+
+        const remember =
+          document.getElementById("remember").checked;
+
+        localStorage.setItem(
+          "momentra_remember",
+          remember ? "true" : "false"
+        );
+
+
+        showMessage(
+          "Login berhasil. Mengalihkan...",
+          "success"
+        );
+
+
+        /*
+          Redirect berdasarkan role.
+        */
+
+        setTimeout(() => {
+
+          if (
+            user &&
+            user.role === "admin"
+          ) {
+
+            window.location.href =
+              "admin.html";
+
+          } else {
+
+            window.location.href =
+              "user.html";
+
+          }
+
+        }, 900);
+
+
+      } catch (error) {
+
+        console.error(
+          "Login error:",
+          error
+        );
+
+        showMessage(
+          error.message ||
+          "Terjadi kesalahan saat login.",
+          "error"
+        );
+
+      } finally {
+
+        loginButton.disabled = false;
+
+        loginButton.classList.remove(
+          "loading"
+        );
+
+        buttonText.textContent =
+          "Masuk";
+
+      }
+
+    });
+
+
+    /* ==========================================
+       FORGOT PASSWORD
+    ========================================== */
+
+    document
+      .getElementById("forgotPassword")
+      .addEventListener("click", (event) => {
+
+        event.preventDefault();
+
+        showMessage(
+          "Fitur lupa password belum tersedia.",
+          "error"
+        );
+
+      });
+
+  </script>
+
+</body>
+</html>

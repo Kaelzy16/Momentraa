@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Daftar — Momentra</title>
+
+  <meta
+    name="description"
+    content="Buat akun Momentra dan temukan momen terbaikmu."
+  >
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap"
+    rel="stylesheet"
+  >
+
+  <style>
+
+    :root {
+      --bg: #080808;
+      --card: #101010;
+      --white: #f5f5f5;
+      --muted: #888;
+      --line: rgba(255,255,255,.10);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+
+      background: var(--bg);
+      color: var(--white);
+
+      font-family: "DM Sans", sans-serif;
+
+      display: flex;
+      flex-direction: column;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    ::selection {
+      background: white;
+      color: black;
+    }
+
+
+    /* =========================
+       NAVBAR
+    ========================= */
+
+    .navbar {
+
+      height: 78px;
+
+      padding: 0 6%;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+
+
+    .logo {
+
+      font-size: 21px;
+
+      font-weight: 700;
+
+      letter-spacing: -1px;
+    }
+
+
+    .logo span {
+      color: #666;
+    }
+
+
+    .back {
+
+      color: #888;
+
+      font-size: 13px;
+
+      transition: .25s;
+    }
+
+
+    .back:hover {
+      color: white;
+    }
+
+
+    /* =========================
+       MAIN
+    ========================= */
+
+    main {
+
+      flex: 1;
+
+      display: grid;
+
+      grid-template-columns: 1fr 1fr;
+
+      min-height: calc(100vh - 78px);
+    }
+
+
+    /* =========================
+       LEFT
+    ========================= */
+
+    .visual {
+
+      position: relative;
+
+      overflow: hidden;
+
+      min-height: 650px;
+
+      background:
+
+        linear-gradient(
+          rgba(0,0,0,.35),
+          rgba(0,0,0,.65)
+        ),
+
+        url(
+          "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1400&q=85"
+        );
+
+      background-size: cover;
+
+      background-position: center;
+    }
+
+
+    .visual-content {
+
+      position: absolute;
+
+      left: 8%;
+      right: 8%;
+      bottom: 8%;
+
+      max-width: 500px;
+    }
+
+
+    .visual-label {
+
+      color: #aaa;
+
+      font-size: 10px;
+
+      text-transform: uppercase;
+
+      letter-spacing: 3px;
+
+      margin-bottom: 18px;
+    }
+
+
+    .visual h1 {
+
+      font-family: "Playfair Display", serif;
+
+      font-size: clamp(45px, 5vw, 70px);
+
+      line-height: .98;
+
+      font-weight: 500;
+
+      letter-spacing: -2px;
+    }
+
+
+    .visual p {
+
+      color: #bbb;
+
+      font-size: 13px;
+
+      line-height: 1.8;
+
+      max-width: 400px;
+
+      margin-top: 20px;
+    }
+
+
+    /* =========================
+       FORM AREA
+    ========================= */
+
+    .form-area {
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      padding: 60px 8%;
+    }
+
+
+    .form-container {
+
+      width: 100%;
+
+      max-width: 430px;
+    }
+
+
+    .form-header {
+
+      margin-bottom: 35px;
+    }
+
+
+    .form-header small {
+
+      color: #666;
+
+      font-size: 10px;
+
+      text-transform: uppercase;
+
+      letter-spacing: 3px;
+    }
+
+
+    .form-header h2 {
+
+      font-size: 42px;
+
+      letter-spacing: -2px;
+
+      margin-top: 10px;
+    }
+
+
+    .form-header p {
+
+      color: #777;
+
+      font-size: 13px;
+
+      line-height: 1.7;
+
+      margin-top: 10px;
+    }
+
+
+    /* =========================
+       FORM
+    ========================= */
+
+    .form-group {
+
+      margin-bottom: 18px;
+    }
+
+
+    .form-group label {
+
+      display: block;
+
+      color: #aaa;
+
+      font-size: 12px;
+
+      margin-bottom: 8px;
+    }
+
+
+    .input {
+
+      width: 100%;
+
+      height: 50px;
+
+      padding: 0 15px;
+
+      border-radius: 7px;
+
+      border: 1px solid var(--line);
+
+      outline: none;
+
+      background: #0d0d0d;
+
+      color: white;
+
+      font-family: inherit;
+
+      font-size: 13px;
+
+      transition: .25s;
+    }
+
+
+    .input::placeholder {
+      color: #555;
+    }
+
+
+    .input:focus {
+
+      border-color: rgba(255,255,255,.35);
+
+      background: #111;
+    }
+
+
+    .password-wrapper {
+      position: relative;
+    }
+
+
+    .password-wrapper .input {
+      padding-right: 55px;
+    }
+
+
+    .show-password {
+
+      position: absolute;
+
+      right: 15px;
+
+      top: 50%;
+
+      transform: translateY(-50%);
+
+      background: none;
+
+      border: none;
+
+      color: #666;
+
+      cursor: pointer;
+
+      font-family: inherit;
+
+      font-size: 11px;
+    }
+
+
+    .show-password:hover {
+      color: white;
+    }
+
+
+    /* =========================
+       TERMS
+    ========================= */
+
+    .terms {
+
+      display: flex;
+
+      gap: 9px;
+
+      align-items: flex-start;
+
+      color: #666;
+
+      font-size: 11px;
+
+      line-height: 1.6;
+
+      margin: 5px 0 22px;
+    }
+
+
+    .terms input {
+
+      margin-top: 3px;
+
+      accent-color: white;
+    }
+
+
+    .terms a {
+
+      color: #aaa;
+
+      text-decoration: underline;
+    }
+
+
+    /* =========================
+       BUTTON
+    ========================= */
+
+    .submit {
+
+      width: 100%;
+
+      height: 50px;
+
+      border: none;
+
+      border-radius: 7px;
+
+      background: white;
+
+      color: black;
+
+      font-family: inherit;
+
+      font-size: 13px;
+
+      font-weight: 700;
+
+      cursor: pointer;
+
+      transition: .25s;
+    }
+
+
+    .submit:hover {
+
+      background: #ddd;
+
+      transform: translateY(-1px);
+    }
+
+
+    .submit:disabled {
+
+      opacity: .5;
+
+      cursor: not-allowed;
+
+      transform: none;
+    }
+
+
+    /* =========================
+       LOGIN
+    ========================= */
+
+    .login-text {
+
+      text-align: center;
+
+      color: #666;
+
+      font-size: 12px;
+
+      margin-top: 25px;
+    }
+
+
+    .login-text a {
+
+      color: white;
+
+      font-weight: 600;
+    }
+
+
+    /* =========================
+       MESSAGE
+    ========================= */
+
+    .message {
+
+      display: none;
+
+      padding: 12px 14px;
+
+      border-radius: 7px;
+
+      margin-bottom: 18px;
+
+      font-size: 12px;
+
+      line-height: 1.5;
+    }
+
+
+    .message.error {
+
+      display: block;
+
+      background: rgba(255,70,70,.08);
+
+      border: 1px solid rgba(255,70,70,.2);
+
+      color: #ff9999;
+    }
+
+
+    .message.success {
+
+      display: block;
+
+      background: rgba(255,255,255,.07);
+
+      border: 1px solid var(--line);
+
+      color: #ddd;
+    }
+
+
+    /* =========================
+       LOADING
+    ========================= */
+
+    .loading {
+
+      display: inline-flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      gap: 8px;
+    }
+
+
+    .spinner {
+
+      width: 13px;
+
+      height: 13px;
+
+      border: 2px solid rgba(0,0,0,.2);
+
+      border-top-color: black;
+
+      border-radius: 50%;
+
+      animation: spin .7s linear infinite;
+    }
+
+
+    @keyframes spin {
+
+      to {
+        transform: rotate(360deg);
+      }
+
+    }
+
+
+    /* =========================
+       MOBILE
+    ========================= */
+
+    @media (max-width: 850px) {
+
+      .navbar {
+        height: 68px;
+      }
+
+
+      main {
+
+        grid-template-columns: 1fr;
+
+        min-height: auto;
+      }
+
+
+      .visual {
+
+        min-height: 320px;
+
+        height: 320px;
+      }
+
+
+      .visual-content {
+
+        left: 7%;
+        right: 7%;
+        bottom: 10%;
+      }
+
+
+      .visual h1 {
+
+        font-size: 43px;
+      }
+
+
+      .form-area {
+
+        padding: 60px 7%;
+      }
+
+    }
+
+
+    @media (max-width: 480px) {
+
+      .navbar {
+
+        padding: 0 5%;
+      }
+
+
+      .form-area {
+
+        padding: 50px 6%;
+      }
+
+
+      .form-header h2 {
+
+        font-size: 36px;
+      }
+
+
+      .visual {
+
+        min-height: 280px;
+
+        height: 280px;
+      }
+
+
+      .visual h1 {
+
+        font-size: 38px;
+      }
+
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <!-- NAVBAR -->
+
+  <nav class="navbar">
+
+    <a href="index.html" class="logo">
+      momentra<span>.</span>
+    </a>
+
+
+    <a href="login.html" class="back">
+      ← Masuk
+    </a>
+
+  </nav>
+
+
+
+  <!-- MAIN -->
+
+  <main>
+
+
+    <!-- VISUAL -->
+
+    <section class="visual">
+
+      <div class="visual-content">
+
+        <div class="visual-label">
+          Welcome to Momentra
+        </div>
+
+
+        <h1>
+          Your moments
+          deserve a place.
+        </h1>
+
+
+        <p>
+          Buat akun Momentra dan mulai menemukan
+          foto dari berbagai event dan momen
+          yang pernah kamu lewatkan.
+        </p>
+
+      </div>
+
+    </section>
+
+
+
+    <!-- FORM -->
+
+    <section class="form-area">
+
+      <div class="form-container">
+
+
+        <div class="form-header">
+
+          <small>
+            Create account
+          </small>
+
+          <h2>
+            Daftar.
+          </h2>
+
+          <p>
+            Buat akun baru untuk mulai menggunakan
+            Momentra.
+          </p>
+
+        </div>
+
+
+
+        <div id="message" class="message"></div>
+
+
+
+        <form id="registerForm">
+
+
+          <!-- NAMA -->
+
+          <div class="form-group">
+
+            <label for="name">
+              Nama
+            </label>
+
+            <input
+              type="text"
+              id="name"
+              class="input"
+              placeholder="Nama kamu"
+              autocomplete="name"
+              required
+            >
+
+          </div>
+
+
+
+          <!-- EMAIL -->
+
+          <div class="form-group">
+
+            <label for="email">
+              Email
+            </label>
+
+            <input
+              type="email"
+              id="email"
+              class="input"
+              placeholder="nama@email.com"
+              autocomplete="email"
+              required
+            >
+
+          </div>
+
+
+
+          <!-- PASSWORD -->
+
+          <div class="form-group">
+
+            <label for="password">
+              Password
+            </label>
+
+
+            <div class="password-wrapper">
+
+              <input
+                type="password"
+                id="password"
+                class="input"
+                placeholder="Minimal 8 karakter"
+                autocomplete="new-password"
+                minlength="8"
+                required
+              >
+
+
+              <button
+                type="button"
+                class="show-password"
+                id="togglePassword"
+              >
+                Lihat
+              </button>
+
+            </div>
+
+          </div>
+
+
+
+          <!-- CONFIRM PASSWORD -->
+
+          <div class="form-group">
+
+            <label for="confirmPassword">
+              Konfirmasi Password
+            </label>
+
+
+            <div class="password-wrapper">
+
+              <input
+                type="password"
+                id="confirmPassword"
+                class="input"
+                placeholder="Ulangi password"
+                autocomplete="new-password"
+                minlength="8"
+                required
+              >
+
+
+              <button
+                type="button"
+                class="show-password"
+                id="toggleConfirm"
+              >
+                Lihat
+              </button>
+
+            </div>
+
+          </div>
+
+
+
+          <!-- TERMS -->
+
+          <label class="terms">
+
+            <input
+              type="checkbox"
+              id="terms"
+              required
+            >
+
+            <span>
+              Saya menyetujui
+              <a href="#">
+                syarat dan ketentuan
+              </a>
+              Momentra.
+            </span>
+
+          </label>
+
+
+
+          <!-- SUBMIT -->
+
+          <button
+            type="submit"
+            class="submit"
+            id="submitButton"
+          >
+            Buat Akun
+          </button>
+
+
+        </form>
+
+
+
+        <div class="login-text">
+
+          Sudah punya akun?
+
+          <a href="login.html">
+            Masuk
+          </a>
+
+        </div>
+
+
+      </div>
+
+    </section>
+
+
+  </main>
+
+
+
+  <script>
+
+    /* ========================================
+       CONFIG
+    ======================================== */
+
+    const API_BASE =
+      "https://momentra-api.christopoluan841.workers.dev";
+
+
+    /* ========================================
+       ELEMENTS
+    ======================================== */
+
+    const form =
+      document.getElementById("registerForm");
+
+    const message =
+      document.getElementById("message");
+
+    const submitButton =
+      document.getElementById("submitButton");
+
+    const password =
+      document.getElementById("password");
+
+    const confirmPassword =
+      document.getElementById("confirmPassword");
+
+    const togglePassword =
+      document.getElementById("togglePassword");
+
+    const toggleConfirm =
+      document.getElementById("toggleConfirm");
+
+
+    /* ========================================
+       PASSWORD TOGGLE
+    ======================================== */
+
+    togglePassword.addEventListener(
+      "click",
+      () => {
+
+        if (password.type === "password") {
+
+          password.type = "text";
+
+          togglePassword.textContent = "Sembunyikan";
+
+        } else {
+
+          password.type = "password";
+
+          togglePassword.textContent = "Lihat";
+
+        }
+
+      }
+    );
+
+
+    toggleConfirm.addEventListener(
+      "click",
+      () => {
+
+        if (confirmPassword.type === "password") {
+
+          confirmPassword.type = "text";
+
+          toggleConfirm.textContent = "Sembunyikan";
+
+        } else {
+
+          confirmPassword.type = "password";
+
+          toggleConfirm.textContent = "Lihat";
+
+        }
+
+      }
+    );
+
+
+    /* ========================================
+       MESSAGE
+    ======================================== */
+
+    function showMessage(text, type) {
+
+      message.textContent = text;
+
+      message.className =
+        "message " + type;
+
+    }
+
+
+    function clearMessage() {
+
+      message.textContent = "";
+
+      message.className = "message";
+
+    }
+
+
+    /* ========================================
+       REGISTER
+    ======================================== */
+
+    form.addEventListener(
+      "submit",
+      async (event) => {
+
+        event.preventDefault();
+
+        clearMessage();
+
+
+        const name =
+          document.getElementById("name")
+            .value.trim();
+
+        const email =
+          document.getElementById("email")
+            .value.trim();
+
+        const passwordValue =
+          password.value;
+
+        const confirmValue =
+          confirmPassword.value;
+
+
+        /* CHECK PASSWORD */
+
+        if (passwordValue.length < 8) {
+
+          showMessage(
+            "Password harus memiliki minimal 8 karakter.",
+            "error"
+          );
+
+          return;
+        }
+
+
+        if (passwordValue !== confirmValue) {
+
+          showMessage(
+            "Konfirmasi password tidak cocok.",
+            "error"
+          );
+
+          return;
+        }
+
+
+        /* LOADING */
+
+        submitButton.disabled = true;
+
+        submitButton.innerHTML = `
+          <span class="loading">
+            <span class="spinner"></span>
+            Membuat akun...
+          </span>
+        `;
+
+
+        try {
+
+          /*
+            Endpoint register diasumsikan:
+            POST /api/auth/register
+
+            Jika endpoint backend kamu berbeda,
+            tinggal ubah URL di bawah.
+          */
+
+          const response =
+            await fetch(
+              `${API_BASE}/api/auth/register`,
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body: JSON.stringify({
+                  name: name,
+                  email: email,
+                  password: passwordValue
+                })
+              }
+            );
+
+
+          const data =
+            await response.json()
+              .catch(() => ({}));
+
+
+          if (!response.ok) {
+
+            throw new Error(
+              data.message ||
+              data.error ||
+              "Gagal membuat akun."
+            );
+
+          }
+
+
+          showMessage(
+            data.message ||
+            "Akun berhasil dibuat. Silakan masuk.",
+            "success"
+          );
+
+
+          form.reset();
+
+
+          setTimeout(() => {
+
+            window.location.href =
+              "login.html";
+
+          }, 1500);
+
+
+        } catch (error) {
+
+          console.error(error);
+
+
+          showMessage(
+            error.message ||
+            "Terjadi kesalahan. Silakan coba lagi.",
+            "error"
+          );
+
+        } finally {
+
+          submitButton.disabled = false;
+
+          submitButton.textContent =
+            "Buat Akun";
+
+        }
+
+      }
+    );
+
+  </script>
+
+
+</body>
+</html>

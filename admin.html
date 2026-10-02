@@ -1,0 +1,3537 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Momentra — Admin</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+
+:root{
+  --bg:#080808;
+  --bg2:#0c0c0c;
+  --panel:#111111;
+  --panel2:#151515;
+  --panel3:#1a1a1a;
+
+  --line:#252525;
+  --line2:#303030;
+
+  --white:#f5f5f5;
+  --text:#e9e9e9;
+  --muted:#858585;
+  --muted2:#5f5f5f;
+
+  --green:#caff39;
+  --green-dark:#9fca1f;
+
+  --danger:#ff6262;
+
+  --radius:18px;
+}
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
+html{
+  scroll-behavior:smooth;
+}
+
+body{
+  font-family:Inter,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+}
+
+button,
+input,
+select,
+textarea{
+  font-family:inherit;
+}
+
+button{
+  cursor:pointer;
+}
+
+a{
+  color:inherit;
+  text-decoration:none;
+}
+
+
+/* =========================
+   TOPBAR
+========================= */
+
+.topbar{
+  height:70px;
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  z-index:1000;
+
+  display:flex;
+  align-items:center;
+
+  padding:0 22px;
+
+  background:rgba(8,8,8,.94);
+  backdrop-filter:blur(14px);
+
+  border-bottom:1px solid var(--line);
+}
+
+.menu-btn{
+  width:42px;
+  height:42px;
+
+  border:1px solid var(--line2);
+  border-radius:11px;
+
+  background:var(--panel);
+
+  color:var(--white);
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  font-size:21px;
+
+  transition:.2s;
+}
+
+.menu-btn:hover{
+  border-color:var(--green);
+  color:var(--green);
+}
+
+.logo{
+  margin-left:15px;
+
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:-.7px;
+}
+
+.logo span{
+  color:var(--green);
+}
+
+.admin-pill{
+  margin-left:auto;
+
+  padding:7px 11px;
+
+  border:1px solid rgba(202,255,57,.25);
+  border-radius:999px;
+
+  background:rgba(202,255,57,.06);
+
+  color:var(--green);
+
+  font-size:10px;
+  font-weight:800;
+
+  letter-spacing:1px;
+}
+
+
+/* =========================
+   SIDEBAR
+========================= */
+
+.sidebar{
+  position:fixed;
+
+  top:70px;
+  left:0;
+  bottom:0;
+
+  width:275px;
+
+  z-index:950;
+
+  padding:22px 16px;
+
+  background:var(--bg2);
+
+  border-right:1px solid var(--line);
+
+  transform:translateX(-100%);
+
+  transition:.25s ease;
+}
+
+.sidebar.open{
+  transform:translateX(0);
+}
+
+.sidebar-title{
+  color:var(--muted2);
+
+  font-size:10px;
+  font-weight:800;
+
+  letter-spacing:1.5px;
+
+  margin:6px 12px 10px;
+}
+
+.nav{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+
+.nav-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+
+  padding:13px 12px;
+
+  border:1px solid transparent;
+  border-radius:12px;
+
+  color:var(--muted);
+
+  font-size:13px;
+  font-weight:600;
+
+  cursor:pointer;
+
+  transition:.2s;
+}
+
+.nav-item:hover{
+  background:var(--panel);
+  color:var(--text);
+}
+
+.nav-item.active{
+  background:rgba(202,255,57,.07);
+  border-color:rgba(202,255,57,.12);
+  color:var(--green);
+}
+
+.nav-icon{
+  width:20px;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  font-size:16px;
+}
+
+.sidebar-bottom{
+  position:absolute;
+
+  left:16px;
+  right:16px;
+  bottom:20px;
+}
+
+.logout-btn{
+  width:100%;
+
+  padding:12px;
+
+  border:1px solid var(--line2);
+  border-radius:12px;
+
+  background:var(--panel);
+
+  color:var(--muted);
+
+  font-size:12px;
+  font-weight:700;
+}
+
+.logout-btn:hover{
+  border-color:var(--danger);
+  color:var(--danger);
+}
+
+
+/* =========================
+   OVERLAY
+========================= */
+
+.overlay{
+  position:fixed;
+
+  inset:0;
+
+  z-index:900;
+
+  background:rgba(0,0,0,.6);
+
+  opacity:0;
+  visibility:hidden;
+
+  transition:.25s;
+}
+
+.overlay.show{
+  opacity:1;
+  visibility:visible;
+}
+
+
+/* =========================
+   MAIN
+========================= */
+
+main{
+  padding-top:70px;
+
+  min-height:100vh;
+
+  transition:.25s;
+}
+
+.container{
+  width:min(1280px,100%);
+
+  margin:auto;
+
+  padding:30px 22px 60px;
+}
+
+
+/* =========================
+   PAGE
+========================= */
+
+.page{
+  display:none;
+}
+
+.page.active{
+  display:block;
+}
+
+.page-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+
+  gap:20px;
+
+  margin-bottom:25px;
+}
+
+.eyebrow{
+  color:var(--green);
+
+  font-size:10px;
+  font-weight:800;
+
+  letter-spacing:1.7px;
+
+  margin-bottom:7px;
+}
+
+.page-head h1{
+  color:var(--white);
+
+  font-size:28px;
+
+  letter-spacing:-1px;
+}
+
+.page-head p{
+  margin-top:7px;
+
+  color:var(--muted);
+
+  font-size:13px;
+}
+
+
+/* =========================
+   STATS
+========================= */
+
+.stats{
+  display:grid;
+
+  grid-template-columns:
+    repeat(4,minmax(0,1fr));
+
+  gap:14px;
+
+  margin-bottom:20px;
+}
+
+.stat-card{
+  padding:20px;
+
+  background:var(--panel);
+
+  border:1px solid var(--line);
+
+  border-radius:var(--radius);
+}
+
+.stat-label{
+  color:var(--muted);
+
+  font-size:9px;
+  font-weight:800;
+
+  letter-spacing:1.2px;
+}
+
+.stat-value{
+  margin-top:10px;
+
+  color:var(--white);
+
+  font-size:27px;
+  font-weight:800;
+
+  letter-spacing:-1px;
+}
+
+.stat-value.green{
+  color:var(--green);
+}
+
+.stat-note{
+  margin-top:6px;
+
+  color:var(--muted2);
+
+  font-size:11px;
+}
+
+
+/* =========================
+   PANELS
+========================= */
+
+.panel{
+  background:var(--panel);
+
+  border:1px solid var(--line);
+
+  border-radius:var(--radius);
+
+  padding:20px;
+
+  margin-bottom:20px;
+}
+
+.panel-head{
+  display:flex;
+
+  align-items:center;
+  justify-content:space-between;
+
+  gap:15px;
+
+  margin-bottom:20px;
+}
+
+.panel-head h2{
+  color:var(--white);
+
+  font-size:15px;
+}
+
+.panel-head p{
+  margin-top:5px;
+
+  color:var(--muted);
+
+  font-size:11px;
+}
+
+
+/* =========================
+   BUTTONS
+========================= */
+
+.btn{
+  border:0;
+  border-radius:10px;
+
+  padding:11px 15px;
+
+  font-size:12px;
+  font-weight:800;
+
+  transition:.2s;
+}
+
+.btn.primary{
+  background:var(--green);
+  color:#080808;
+}
+
+.btn.primary:hover{
+  background:#d7ff65;
+}
+
+.btn.secondary{
+  background:var(--panel2);
+
+  color:var(--text);
+
+  border:1px solid var(--line2);
+}
+
+.btn.secondary:hover{
+  border-color:var(--green);
+  color:var(--green);
+}
+
+
+/* =========================
+   QUICK ACTION
+========================= */
+
+.quick-grid{
+  display:grid;
+
+  grid-template-columns:
+    repeat(3,minmax(0,1fr));
+
+  gap:12px;
+}
+
+.quick-card{
+  padding:18px;
+
+  border:1px solid var(--line);
+
+  border-radius:14px;
+
+  background:var(--panel2);
+
+  cursor:pointer;
+
+  transition:.2s;
+}
+
+.quick-card:hover{
+  border-color:rgba(202,255,57,.3);
+  transform:translateY(-2px);
+}
+
+.quick-icon{
+  width:38px;
+  height:38px;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  border-radius:10px;
+
+  background:rgba(202,255,57,.08);
+
+  color:var(--green);
+
+  margin-bottom:12px;
+
+  font-size:18px;
+}
+
+.quick-card strong{
+  display:block;
+
+  color:var(--white);
+
+  font-size:13px;
+}
+
+.quick-card span{
+  display:block;
+
+  color:var(--muted);
+
+  font-size:11px;
+
+  margin-top:5px;
+}
+
+
+/* =========================
+   TABLE
+========================= */
+
+.table-wrap{
+  width:100%;
+
+  overflow-x:auto;
+}
+
+table{
+  width:100%;
+
+  border-collapse:collapse;
+
+  min-width:650px;
+}
+
+th{
+  padding:11px 10px;
+
+  text-align:left;
+
+  color:var(--muted2);
+
+  font-size:9px;
+  font-weight:800;
+
+  letter-spacing:1px;
+
+  border-bottom:1px solid var(--line);
+}
+
+td{
+  padding:14px 10px;
+
+  border-bottom:1px solid var(--line);
+
+  color:var(--text);
+
+  font-size:12px;
+}
+
+tbody tr:last-child td{
+  border-bottom:0;
+}
+
+tbody tr:hover{
+  background:rgba(255,255,255,.015);
+}
+
+
+/* =========================
+   INPUT
+========================= */
+
+.form-grid{
+  display:grid;
+
+  grid-template-columns:
+    repeat(2,minmax(0,1fr));
+
+  gap:14px;
+}
+
+.form-group{
+  display:flex;
+
+  flex-direction:column;
+
+  gap:7px;
+}
+
+.form-group.full{
+  grid-column:1/-1;
+}
+
+.form-group label{
+  color:var(--muted);
+
+  font-size:10px;
+  font-weight:800;
+
+  letter-spacing:.5px;
+}
+
+.input,
+textarea,
+select{
+  width:100%;
+
+  padding:12px 13px;
+
+  border:1px solid var(--line2);
+  border-radius:11px;
+
+  outline:none;
+
+  background:var(--panel2);
+
+  color:var(--text);
+
+  font-size:12px;
+
+  transition:.2s;
+}
+
+textarea{
+  min-height:100px;
+
+  resize:vertical;
+}
+
+.input:focus,
+textarea:focus,
+select:focus{
+  border-color:var(--green);
+
+  box-shadow:
+    0 0 0 3px rgba(202,255,57,.05);
+}
+
+select option{
+  background:#111;
+}
+
+
+/* =========================
+   BUAT
+========================= */
+
+.create-layout{
+  display:grid;
+
+  grid-template-columns:
+    minmax(0,1fr) 350px;
+
+  gap:20px;
+}
+
+.steps{
+  display:flex;
+
+  gap:8px;
+
+  margin-bottom:20px;
+
+  overflow-x:auto;
+}
+
+.step{
+  flex:1;
+
+  min-width:120px;
+
+  padding:12px;
+
+  border:1px solid var(--line);
+
+  border-radius:12px;
+
+  background:var(--panel);
+
+  color:var(--muted);
+
+  font-size:10px;
+  font-weight:800;
+
+  text-align:center;
+}
+
+.step.active{
+  border-color:rgba(202,255,57,.3);
+
+  background:rgba(202,255,57,.06);
+
+  color:var(--green);
+}
+
+.upload-box{
+  min-height:145px;
+
+  display:flex;
+
+  flex-direction:column;
+
+  align-items:center;
+  justify-content:center;
+
+  text-align:center;
+
+  padding:20px;
+
+  border:1px dashed var(--line2);
+
+  border-radius:14px;
+
+  background:var(--panel2);
+
+  cursor:pointer;
+
+  transition:.2s;
+}
+
+.upload-box:hover{
+  border-color:var(--green);
+
+  background:rgba(202,255,57,.025);
+}
+
+.upload-box input{
+  display:none;
+}
+
+.upload-icon{
+  width:42px;
+  height:42px;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  margin-bottom:10px;
+
+  border-radius:12px;
+
+  background:rgba(202,255,57,.08);
+
+  color:var(--green);
+
+  font-size:22px;
+}
+
+.upload-box strong{
+  color:var(--text);
+
+  font-size:13px;
+}
+
+.upload-box span{
+  color:var(--muted);
+
+  font-size:10px;
+
+  margin-top:5px;
+}
+
+
+/* =========================
+   PHOTO PREVIEW
+========================= */
+
+.photo-preview{
+  display:grid;
+
+  grid-template-columns:
+    repeat(4,minmax(0,1fr));
+
+  gap:10px;
+
+  margin-top:12px;
+}
+
+.preview-item{
+  position:relative;
+
+  aspect-ratio:1/1;
+
+  overflow:hidden;
+
+  border-radius:12px;
+
+  background:#050505;
+
+  border:1px solid var(--line);
+}
+
+.preview-item img{
+  width:100%;
+  height:100%;
+
+  display:block;
+
+  object-fit:cover;
+}
+
+.watermark{
+  position:absolute;
+
+  inset:-60%;
+
+  display:flex;
+
+  align-items:center;
+  justify-content:center;
+
+  transform:rotate(-27deg);
+
+  color:rgba(255,255,255,.43);
+
+  font-size:18px;
+  font-weight:800;
+
+  letter-spacing:2px;
+
+  text-shadow:
+    0 2px 8px rgba(0,0,0,.7);
+
+  background:
+    repeating-linear-gradient(
+      -27deg,
+      transparent 0,
+      transparent 48px,
+      rgba(0,0,0,.13) 48px,
+      rgba(0,0,0,.13) 78px
+    );
+
+  pointer-events:none;
+}
+
+
+/* =========================
+   LIVE CARD
+========================= */
+
+.preview-card{
+  position:sticky;
+
+  top:90px;
+}
+
+.preview-image{
+  position:relative;
+
+  overflow:hidden;
+
+  aspect-ratio:4/3;
+
+  border-radius:14px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1b1b1b,
+      #090909
+    );
+
+  border:1px solid var(--line);
+}
+
+.preview-image::after{
+  content:"momentra.";
+
+  position:absolute;
+
+  left:50%;
+  top:50%;
+
+  transform:
+    translate(-50%,-50%)
+    rotate(-25deg);
+
+  color:rgba(255,255,255,.16);
+
+  font-size:26px;
+  font-weight:800;
+
+  letter-spacing:2px;
+
+  white-space:nowrap;
+}
+
+.preview-info{
+  padding-top:15px;
+}
+
+.preview-info h3{
+  color:var(--white);
+
+  font-size:15px;
+}
+
+.preview-info p{
+  margin-top:6px;
+
+  color:var(--muted);
+
+  font-size:11px;
+}
+
+.preview-price{
+  margin-top:14px;
+
+  color:var(--green);
+
+  font-size:19px;
+  font-weight:800;
+}
+
+
+/* =========================
+   TRANSAKSI
+========================= */
+
+.transaction-toolbar{
+  display:grid;
+
+  grid-template-columns:
+    1fr 220px;
+
+  gap:12px;
+
+  margin-bottom:20px;
+}
+
+.transaction-user{
+  display:flex;
+
+  flex-direction:column;
+
+  gap:3px;
+}
+
+.transaction-user strong{
+  color:var(--white);
+
+  font-size:13px;
+}
+
+.transaction-user span{
+  color:var(--muted);
+
+  font-size:11px;
+}
+
+.transaction-id{
+  color:var(--green);
+
+  font-size:12px;
+  font-weight:800;
+}
+
+.transaction-photo{
+  display:flex;
+
+  flex-direction:column;
+
+  gap:3px;
+}
+
+.transaction-photo strong{
+  color:var(--text);
+
+  font-size:12px;
+}
+
+.transaction-photo span{
+  color:var(--muted);
+
+  font-size:11px;
+}
+
+.status{
+  display:inline-flex;
+
+  align-items:center;
+
+  width:max-content;
+
+  padding:6px 10px;
+
+  border-radius:999px;
+
+  font-size:9px;
+  font-weight:800;
+
+  text-transform:uppercase;
+
+  letter-spacing:.6px;
+}
+
+.status.success{
+  color:var(--green);
+
+  background:rgba(202,255,57,.09);
+
+  border:1px solid rgba(202,255,57,.18);
+}
+
+.status.pending{
+  color:#f5c542;
+
+  background:rgba(245,197,66,.08);
+
+  border:1px solid rgba(245,197,66,.16);
+}
+
+.status.failed{
+  color:var(--danger);
+
+  background:rgba(255,98,98,.08);
+
+  border:1px solid rgba(255,98,98,.16);
+}
+
+.transaction-detail-btn{
+  border:1px solid var(--line2);
+
+  background:var(--panel2);
+
+  color:var(--text);
+
+  border-radius:9px;
+
+  padding:7px 10px;
+
+  cursor:pointer;
+
+  font-size:11px;
+}
+
+.transaction-detail-btn:hover{
+  border-color:var(--green);
+
+  color:var(--green);
+}
+
+.empty-transactions{
+  text-align:center;
+
+  padding:55px 20px;
+
+  color:var(--muted);
+}
+
+.empty-transactions strong{
+  display:block;
+
+  color:var(--text);
+
+  margin-bottom:6px;
+}
+
+
+/* =========================
+   PAYMENT
+========================= */
+
+.warning{
+  padding:14px 15px;
+
+  margin-bottom:18px;
+
+  border:1px solid rgba(245,197,66,.18);
+
+  border-radius:12px;
+
+  background:rgba(245,197,66,.05);
+
+  color:#d5b557;
+
+  font-size:11px;
+
+  line-height:1.6;
+}
+
+
+/* =========================
+   MOBILE
+========================= */
+
+@media(max-width:1000px){
+
+  .stats{
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+  }
+
+  .create-layout{
+    grid-template-columns:1fr;
+  }
+
+  .preview-card{
+    position:static;
+  }
+
+}
+
+@media(max-width:700px){
+
+  .topbar{
+    padding:0 15px;
+  }
+
+  .container{
+    padding:24px 15px 50px;
+  }
+
+  .page-head h1{
+    font-size:24px;
+  }
+
+  .stats{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .quick-grid{
+    grid-template-columns:1fr;
+  }
+
+  .form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .form-group.full{
+    grid-column:auto;
+  }
+
+  .photo-preview{
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+  }
+
+  .transaction-toolbar{
+    grid-template-columns:1fr;
+  }
+
+  .panel{
+    padding:15px;
+  }
+
+}
+
+@media(max-width:450px){
+
+  .stats{
+    grid-template-columns:1fr;
+  }
+
+  .admin-pill{
+    display:none;
+  }
+
+}
+
+</style>
+</head>
+
+
+<body>
+
+
+<!-- =========================
+     TOPBAR
+========================= -->
+
+<header class="topbar">
+
+  <button
+    class="menu-btn"
+    onclick="toggleSidebar()">
+
+    ☰
+
+  </button>
+
+
+  <div class="logo">
+    momentra<span>.</span>
+  </div>
+
+
+  <div class="admin-pill">
+    ADMIN
+  </div>
+
+</header>
+
+
+
+<!-- =========================
+     OVERLAY
+========================= -->
+
+<div
+  class="overlay"
+  id="overlay"
+  onclick="closeSidebar()">
+</div>
+
+
+
+<!-- =========================
+     SIDEBAR
+========================= -->
+
+<aside
+  class="sidebar"
+  id="sidebar">
+
+  <div class="sidebar-title">
+    MENU
+  </div>
+
+
+  <nav class="nav">
+
+
+    <div
+      class="nav-item active"
+      data-page="dashboard"
+      onclick="showPage('dashboard')">
+
+      <span class="nav-icon">⌂</span>
+
+      <span>Dashboard</span>
+
+    </div>
+
+
+    <div
+      class="nav-item"
+      data-page="user"
+      onclick="showPage('user')">
+
+      <span class="nav-icon">♙</span>
+
+      <span>User</span>
+
+    </div>
+
+
+    <div
+      class="nav-item"
+      data-page="transaksi"
+      onclick="showPage('transaksi')">
+
+      <span class="nav-icon">▣</span>
+
+      <span>Transaksi</span>
+
+    </div>
+
+
+    <div
+      class="nav-item"
+      data-page="buat"
+      onclick="showPage('buat')">
+
+      <span class="nav-icon">＋</span>
+
+      <span>Buat</span>
+
+    </div>
+
+
+    <div
+      class="nav-item"
+      data-page="payment"
+      onclick="showPage('payment')">
+
+      <span class="nav-icon">₿</span>
+
+      <span>Payment Configuration</span>
+
+    </div>
+
+
+  </nav>
+
+
+  <div class="sidebar-bottom">
+
+    <button
+      class="logout-btn"
+      onclick="logout()">
+
+      Keluar
+
+    </button>
+
+  </div>
+
+</aside>
+
+
+
+<!-- =========================
+     MAIN
+========================= -->
+
+<main>
+
+<div class="container">
+
+
+
+<!-- =========================
+     DASHBOARD
+========================= -->
+
+<section
+  id="dashboard"
+  class="page active">
+
+
+  <div class="page-head">
+
+    <div>
+
+      <div class="eyebrow">
+        MOMENTRA / ADMIN
+      </div>
+
+      <h1>
+        Dashboard
+      </h1>
+
+      <p>
+        Kelola Momentra dari satu tempat.
+      </p>
+
+    </div>
+
+  </div>
+
+
+
+  <div class="stats">
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        TOTAL USER
+      </div>
+
+      <div
+        class="stat-value"
+        id="dashboardUsers">
+        0
+      </div>
+
+      <div class="stat-note">
+        User terdaftar
+      </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        TRANSAKSI
+      </div>
+
+      <div
+        class="stat-value"
+        id="dashboardTransactions">
+        0
+      </div>
+
+      <div class="stat-note">
+        Semua transaksi
+      </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        FOTO
+      </div>
+
+      <div
+        class="stat-value"
+        id="dashboardPhotos">
+        0
+      </div>
+
+      <div class="stat-note">
+        Foto tersedia
+      </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        PENDAPATAN
+      </div>
+
+      <div
+        class="stat-value green"
+        id="dashboardRevenue">
+        Rp0
+      </div>
+
+      <div class="stat-note">
+        Pembayaran berhasil
+      </div>
+
+    </div>
+
+
+  </div>
+
+
+
+  <div class="panel">
+
+    <div class="panel-head">
+
+      <div>
+
+        <h2>
+          Quick Action
+        </h2>
+
+        <p>
+          Akses menu utama dengan cepat.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="quick-grid">
+
+
+      <div
+        class="quick-card"
+        onclick="showPage('buat')">
+
+        <div class="quick-icon">
+          ＋
+        </div>
+
+        <strong>
+          Buat Momen
+        </strong>
+
+        <span>
+          Tambahkan olahraga, cup, match dan foto.
+        </span>
+
+      </div>
+
+
+      <div
+        class="quick-card"
+        onclick="showPage('transaksi')">
+
+        <div class="quick-icon">
+          ▣
+        </div>
+
+        <strong>
+          Lihat Transaksi
+        </strong>
+
+        <span>
+          Pantau pembelian user.
+        </span>
+
+      </div>
+
+
+      <div
+        class="quick-card"
+        onclick="showPage('user')">
+
+        <div class="quick-icon">
+          ♙
+        </div>
+
+        <strong>
+          Kelola User
+        </strong>
+
+        <span>
+          Lihat user yang terdaftar.
+        </span>
+
+      </div>
+
+
+    </div>
+
+  </div>
+
+
+
+  <div class="panel">
+
+    <div class="panel-head">
+
+      <div>
+
+        <h2>
+          Aktivitas Terbaru
+        </h2>
+
+        <p>
+          Aktivitas terbaru di Momentra.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div id="activityList">
+
+      <div class="empty-transactions">
+
+        <strong>
+          Belum ada aktivitas
+        </strong>
+
+        Aktivitas akan muncul di sini.
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =========================
+     USER
+========================= -->
+
+<section
+  id="user"
+  class="page">
+
+
+  <div class="page-head">
+
+    <div>
+
+      <div class="eyebrow">
+        MOMENTRA / USER
+      </div>
+
+      <h1>
+        User
+      </h1>
+
+      <p>
+        Daftar pengguna Momentra.
+      </p>
+
+    </div>
+
+  </div>
+
+
+
+  <div class="panel">
+
+    <div class="panel-head">
+
+      <div>
+
+        <h2>
+          Daftar User
+        </h2>
+
+        <p>
+          User yang terdaftar pada sistem.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>
+              USER
+            </th>
+
+            <th>
+              EMAIL
+            </th>
+
+            <th>
+              ROLE
+            </th>
+
+            <th>
+              STATUS
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody id="userTable">
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =========================
+     TRANSAKSI
+========================= -->
+
+<section
+  id="transaksi"
+  class="page">
+
+
+  <div class="page-head">
+
+    <div>
+
+      <div class="eyebrow">
+        MOMENTRA / TRANSAKSI
+      </div>
+
+      <h1>
+        Transaksi
+      </h1>
+
+      <p>
+        Pantau semua pembelian yang dilakukan user.
+      </p>
+
+    </div>
+
+  </div>
+
+
+
+  <div class="stats">
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        TOTAL TRANSAKSI
+      </div>
+
+      <div
+        class="stat-value"
+        id="totalTransactions">
+        0
+      </div>
+
+      <div class="stat-note">
+        Semua transaksi
+      </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        BERHASIL
+      </div>
+
+      <div
+        class="stat-value green"
+        id="successTransactions">
+        0
+      </div>
+
+      <div class="stat-note">
+        Pembayaran berhasil
+      </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        PENDING
+      </div>
+
+      <div
+        class="stat-value"
+        id="pendingTransactions">
+        0
+      </div>
+
+      <div class="stat-note">
+        Menunggu pembayaran
+      </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+      <div class="stat-label">
+        PENDAPATAN
+      </div>
+
+      <div
+        class="stat-value green"
+        id="transactionRevenue">
+        Rp0
+      </div>
+
+      <div class="stat-note">
+        Total pembayaran berhasil
+      </div>
+
+    </div>
+
+
+  </div>
+
+
+
+  <div class="panel">
+
+    <div class="panel-head">
+
+      <div>
+
+        <h2>
+          Daftar Transaksi
+        </h2>
+
+        <p>
+          Semua pembelian foto Momentra.
+        </p>
+
+      </div>
+
+
+      <button
+        class="btn secondary"
+        onclick="loadTransactions()">
+
+        ↻ Refresh
+
+      </button>
+
+    </div>
+
+
+
+    <div class="transaction-toolbar">
+
+
+      <input
+        id="transactionSearch"
+        class="input"
+        type="text"
+        placeholder="Cari transaksi, nama user..."
+        oninput="renderTransactions()">
+
+
+      <select
+        id="transactionStatus"
+        class="input"
+        onchange="renderTransactions()">
+
+        <option value="all">
+          Semua Status
+        </option>
+
+        <option value="success">
+          Berhasil
+        </option>
+
+        <option value="pending">
+          Pending
+        </option>
+
+        <option value="failed">
+          Gagal
+        </option>
+
+      </select>
+
+
+    </div>
+
+
+
+    <div class="table-wrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>
+              TRANSAKSI
+            </th>
+
+            <th>
+              USER
+            </th>
+
+            <th>
+              FOTO
+            </th>
+
+            <th>
+              TOTAL
+            </th>
+
+            <th>
+              STATUS
+            </th>
+
+            <th>
+              TANGGAL
+            </th>
+
+            <th>
+              
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody id="transactionTable">
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =========================
+     BUAT
+========================= -->
+
+<section
+  id="buat"
+  class="page">
+
+
+  <div class="page-head">
+
+    <div>
+
+      <div class="eyebrow">
+        MOMENTRA / BUAT
+      </div>
+
+      <h1>
+        Buat
+      </h1>
+
+      <p>
+        Buat olahraga, cup, sekolah vs sekolah dan foto.
+      </p>
+
+    </div>
+
+  </div>
+
+
+
+  <div class="steps">
+
+    <div class="step active">
+      01 · OLAHRAGA
+    </div>
+
+    <div class="step">
+      02 · CUP
+    </div>
+
+    <div class="step">
+      03 · SEKOLAH VS SEKOLAH
+    </div>
+
+    <div class="step">
+      04 · FOTO
+    </div>
+
+  </div>
+
+
+
+  <div class="create-layout">
+
+
+    <div>
+
+
+      <div class="panel">
+
+        <div class="panel-head">
+
+          <div>
+
+            <h2>
+              Olahraga & Cup
+            </h2>
+
+            <p>
+              Buat event olahraga dan cup.
+            </p>
+
+          </div>
+
+        </div>
+
+
+
+        <div class="form-grid">
+
+
+          <div class="form-group">
+
+            <label>
+              NAMA OLAHRAGA / EVENT
+            </label>
+
+            <input
+              id="eventName"
+              class="input"
+              type="text"
+              placeholder="Contoh: Volleyball">
+
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label>
+              LOKASI
+            </label>
+
+            <input
+              id="eventLocation"
+              class="input"
+              type="text"
+              placeholder="Contoh: Manado">
+
+
+          </div>
+
+
+          <div class="form-group full">
+
+            <label>
+              DESKRIPSI
+            </label>
+
+            <textarea
+              id="eventDescription"
+              placeholder="Deskripsi event..."></textarea>
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label>
+              NAMA CUP
+            </label>
+
+            <input
+              id="cupName"
+              class="input"
+              type="text"
+              placeholder="Contoh: Cup 2026">
+
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label>
+              DESKRIPSI CUP
+            </label>
+
+            <input
+              id="cupDescription"
+              class="input"
+              type="text"
+              placeholder="Deskripsi cup">
+
+
+          </div>
+
+
+        </div>
+
+
+      </div>
+
+
+
+      <div class="panel">
+
+        <div class="panel-head">
+
+          <div>
+
+            <h2>
+              Sekolah vs Sekolah
+            </h2>
+
+            <p>
+              Masukkan pertandingan.
+            </p>
+
+          </div>
+
+        </div>
+
+
+
+        <div class="form-grid">
+
+
+          <div class="form-group">
+
+            <label>
+              SEKOLAH A
+            </label>
+
+            <input
+              id="teamA"
+              class="input"
+              type="text"
+              placeholder="Contoh: SMP Don Bosco">
+
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label>
+              SEKOLAH B
+            </label>
+
+            <input
+              id="teamB"
+              class="input"
+              type="text"
+              placeholder="Contoh: Manado Independent School">
+
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label>
+              NAMA MATCH
+            </label>
+
+            <input
+              id="matchName"
+              class="input"
+              type="text"
+              placeholder="Contoh: Semifinal">
+
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label>
+              TANGGAL & WAKTU
+            </label>
+
+            <input
+              id="matchDate"
+              class="input"
+              type="datetime-local">
+
+
+          </div>
+
+
+        </div>
+
+
+      </div>
+
+
+
+      <div class="panel">
+
+        <div class="panel-head">
+
+          <div>
+
+            <h2>
+              Foto
+            </h2>
+
+            <p>
+              Upload foto pertandingan.
+            </p>
+
+          </div>
+
+        </div>
+
+
+
+        <div class="form-group">
+
+
+          <label class="upload-box">
+
+            <input
+              id="photoInput"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple>
+
+            <div class="upload-icon">
+              ↑
+            </div>
+
+            <strong>
+              Pilih foto
+            </strong>
+
+            <span>
+              JPG, PNG atau WEBP · Bisa pilih banyak foto
+            </span>
+
+          </label>
+
+
+        </div>
+
+
+
+        <div
+          class="photo-preview"
+          id="photoPreview">
+        </div>
+
+
+
+        <div
+          class="form-grid"
+          style="margin-top:15px;">
+
+
+          <div class="form-group">
+
+            <label>
+              HARGA / FOTO
+            </label>
+
+            <input
+              id="photoPrice"
+              class="input"
+              type="number"
+              value="25000"
+              min="0">
+
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label>
+              FOTOGRAFER
+            </label>
+
+            <input
+              id="photographer"
+              class="input"
+              type="text"
+              placeholder="Nama fotografer">
+
+
+          </div>
+
+
+        </div>
+
+
+        <div style="margin-top:18px;">
+
+          <button
+            class="btn primary"
+            onclick="saveMoment()">
+
+            Simpan Momen
+
+          </button>
+
+        </div>
+
+
+      </div>
+
+
+    </div>
+
+
+
+    <div>
+
+
+      <div class="panel preview-card">
+
+        <div class="panel-head">
+
+          <div>
+
+            <h2>
+              Live Preview
+            </h2>
+
+            <p>
+              Tampilan foto untuk user.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <div class="preview-image">
+
+        </div>
+
+
+        <div class="preview-info">
+
+          <h3 id="previewTitle">
+            Sekolah A vs Sekolah B
+          </h3>
+
+          <p id="previewPhotographer">
+            Fotografer
+          </p>
+
+          <div
+            class="preview-price"
+            id="previewPrice">
+
+            Rp25.000
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+    </div>
+
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =========================
+     PAYMENT
+========================= -->
+
+<section
+  id="payment"
+  class="page">
+
+
+  <div class="page-head">
+
+    <div>
+
+      <div class="eyebrow">
+        MOMENTRA / PAYMENT
+      </div>
+
+      <h1>
+        Payment Configuration
+      </h1>
+
+      <p>
+        Konfigurasi koneksi payment.
+      </p>
+
+    </div>
+
+  </div>
+
+
+
+  <div class="panel">
+
+
+    <div class="warning">
+
+      Untuk keamanan, API Key payment sebaiknya disimpan
+      sebagai secret di backend / Cloudflare Worker,
+      bukan di frontend.
+
+    </div>
+
+
+
+    <div class="form-grid">
+
+
+      <div class="form-group full">
+
+        <label>
+          API KEY
+        </label>
+
+        <input
+          id="paymentApiKey"
+          class="input"
+          type="password"
+          placeholder="Masukkan API Key">
+
+
+      </div>
+
+
+      <div class="form-group full">
+
+        <label>
+          BASE URL
+        </label>
+
+        <input
+          id="paymentBaseUrl"
+          class="input"
+          type="url"
+          value="https://momentra-api.christopoluan841.workers.dev"
+          placeholder="https://...">
+
+
+      </div>
+
+
+    </div>
+
+
+
+    <div
+      style="
+        display:flex;
+        gap:10px;
+        margin-top:18px;
+        flex-wrap:wrap;
+      ">
+
+
+      <button
+        class="btn primary"
+        onclick="savePaymentConfig()">
+
+        Save Configuration
+
+      </button>
+
+
+      <button
+        class="btn secondary"
+        onclick="testConnection()">
+
+        Test Connection
+
+      </button>
+
+
+    </div>
+
+
+  </div>
+
+
+</section>
+
+
+
+</div>
+
+</main>
+
+
+
+<script>
+
+/* =========================
+   CONFIG
+========================= */
+
+const API_BASE =
+  "https://momentra-api.christopoluan841.workers.dev";
+
+
+/* =========================
+   SIDEBAR
+========================= */
+
+function toggleSidebar(){
+
+  document
+    .getElementById("sidebar")
+    .classList.toggle("open");
+
+  document
+    .getElementById("overlay")
+    .classList.toggle("show");
+
+}
+
+
+function closeSidebar(){
+
+  document
+    .getElementById("sidebar")
+    .classList.remove("open");
+
+  document
+    .getElementById("overlay")
+    .classList.remove("show");
+
+}
+
+
+/* =========================
+   PAGE
+========================= */
+
+function showPage(page){
+
+  document
+    .querySelectorAll(".page")
+    .forEach(section => {
+
+      section.classList.remove("active");
+
+    });
+
+
+  const target =
+    document.getElementById(page);
+
+  if(target){
+    target.classList.add("active");
+  }
+
+
+  document
+    .querySelectorAll(".nav-item")
+    .forEach(item => {
+
+      item.classList.toggle(
+        "active",
+        item.dataset.page === page
+      );
+
+    });
+
+
+  closeSidebar();
+
+
+  if(page === "transaksi"){
+    renderTransactions();
+  }
+
+}
+
+
+/* =========================
+   RUPIAH
+========================= */
+
+function formatRupiah(number){
+
+  return new Intl.NumberFormat(
+    "id-ID",
+    {
+      style:"currency",
+      currency:"IDR",
+      maximumFractionDigits:0
+    }
+  ).format(Number(number) || 0);
+
+}
+
+
+/* =========================
+   USER
+========================= */
+
+const users = [
+
+  {
+    name:"Mikael",
+    email:"mikael@example.com",
+    role:"USER",
+    status:"Aktif"
+  },
+
+  {
+    name:"Andi",
+    email:"andi@example.com",
+    role:"USER",
+    status:"Aktif"
+  },
+
+  {
+    name:"Admin",
+    email:"admin@momentra.id",
+    role:"ADMIN",
+    status:"Aktif"
+  }
+
+];
+
+
+function renderUsers(){
+
+  const table =
+    document.getElementById(
+      "userTable"
+    );
+
+  if(!table) return;
+
+
+  table.innerHTML =
+    users.map(user => `
+
+      <tr>
+
+        <td>
+          <strong>
+            ${user.name}
+          </strong>
+        </td>
+
+        <td>
+          ${user.email}
+        </td>
+
+        <td>
+          ${user.role}
+        </td>
+
+        <td>
+
+          <span class="status success">
+            ${user.status}
+          </span>
+
+        </td>
+
+      </tr>
+
+    `).join("");
+
+
+  document.getElementById(
+    "dashboardUsers"
+  ).textContent = users.length;
+
+}
+
+
+/* =========================
+   TRANSAKSI
+========================= */
+
+let transactions = [
+
+  {
+    id:"TRX-20260920-001",
+
+    user:"Mikael",
+
+    email:"mikael@example.com",
+
+    photo:"SMP Don Bosco vs MIS",
+
+    quantity:3,
+
+    total:75000,
+
+    status:"success",
+
+    date:"20 Sep 2026, 21:32"
+
+  },
+
+
+  {
+    id:"TRX-20260920-002",
+
+    user:"Andi",
+
+    email:"andi@example.com",
+
+    photo:"MIS vs SMP 3",
+
+    quantity:1,
+
+    total:25000,
+
+    status:"pending",
+
+    date:"20 Sep 2026, 21:45"
+
+  }
+
+];
+
+
+function getStatusLabel(status){
+
+  if(status === "success"){
+    return "Berhasil";
+  }
+
+  if(status === "pending"){
+    return "Pending";
+  }
+
+  if(status === "failed"){
+    return "Gagal";
+  }
+
+  return status;
+
+}
+
+
+function loadTransactions(){
+
+  /*
+    SEMENTARA DATA DEMO.
+
+    Nantinya bisa diganti dengan:
+
+    GET /api/admin/transactions
+
+    dari Worker Momentra.
+  */
+
+  renderTransactions();
+
+}
+
+
+function renderTransactions(){
+
+  const tbody =
+    document.getElementById(
+      "transactionTable"
+    );
+
+  if(!tbody) return;
+
+
+  const search =
+    (
+      document.getElementById(
+        "transactionSearch"
+      )?.value || ""
+    ).toLowerCase();
+
+
+  const status =
+    document.getElementById(
+      "transactionStatus"
+    )?.value || "all";
+
+
+  const filtered =
+    transactions.filter(tx => {
+
+      const matchesSearch =
+
+        tx.id
+          .toLowerCase()
+          .includes(search)
+
+        ||
+
+        tx.user
+          .toLowerCase()
+          .includes(search)
+
+        ||
+
+        tx.email
+          .toLowerCase()
+          .includes(search)
+
+        ||
+
+        tx.photo
+          .toLowerCase()
+          .includes(search);
+
+
+      const matchesStatus =
+        status === "all" ||
+        tx.status === status;
+
+
+      return (
+        matchesSearch &&
+        matchesStatus
+      );
+
+    });
+
+
+  if(filtered.length === 0){
+
+    tbody.innerHTML = `
+
+      <tr>
+
+        <td colspan="7">
+
+          <div class="empty-transactions">
+
+            <strong>
+              Tidak ada transaksi
+            </strong>
+
+            Belum ada transaksi yang sesuai.
+
+          </div>
+
+        </td>
+
+      </tr>
+
+    `;
+
+    updateTransactionStats();
+
+    return;
+
+  }
+
+
+  tbody.innerHTML =
+
+    filtered.map(tx => `
+
+      <tr>
+
+
+        <td>
+
+          <div class="transaction-id">
+            ${tx.id}
+          </div>
+
+        </td>
+
+
+        <td>
+
+          <div class="transaction-user">
+
+            <strong>
+              ${tx.user}
+            </strong>
+
+            <span>
+              ${tx.email}
+            </span>
+
+          </div>
+
+        </td>
+
+
+        <td>
+
+          <div class="transaction-photo">
+
+            <strong>
+              ${tx.photo}
+            </strong>
+
+            <span>
+              ${tx.quantity} foto
+            </span>
+
+          </div>
+
+        </td>
+
+
+        <td>
+
+          <strong>
+            ${formatRupiah(tx.total)}
+          </strong>
+
+        </td>
+
+
+        <td>
+
+          <span
+            class="status ${tx.status}">
+
+            ${getStatusLabel(tx.status)}
+
+          </span>
+
+        </td>
+
+
+        <td>
+          ${tx.date}
+        </td>
+
+
+        <td>
+
+          <button
+            class="transaction-detail-btn"
+            onclick="showTransactionDetail('${tx.id}')">
+
+            Detail
+
+          </button>
+
+        </td>
+
+
+      </tr>
+
+    `).join("");
+
+
+  updateTransactionStats();
+
+}
+
+
+function updateTransactionStats(){
+
+  const total =
+    transactions.length;
+
+
+  const success =
+    transactions.filter(
+      tx => tx.status === "success"
+    ).length;
+
+
+  const pending =
+    transactions.filter(
+      tx => tx.status === "pending"
+    ).length;
+
+
+  const revenue =
+    transactions
+      .filter(
+        tx => tx.status === "success"
+      )
+      .reduce(
+        (sum,tx) =>
+          sum + Number(tx.total || 0),
+        0
+      );
+
+
+  const totalEl =
+    document.getElementById(
+      "totalTransactions"
+    );
+
+  const successEl =
+    document.getElementById(
+      "successTransactions"
+    );
+
+  const pendingEl =
+    document.getElementById(
+      "pendingTransactions"
+    );
+
+  const revenueEl =
+    document.getElementById(
+      "transactionRevenue"
+    );
+
+
+  if(totalEl){
+    totalEl.textContent = total;
+  }
+
+  if(successEl){
+    successEl.textContent = success;
+  }
+
+  if(pendingEl){
+    pendingEl.textContent = pending;
+  }
+
+  if(revenueEl){
+    revenueEl.textContent =
+      formatRupiah(revenue);
+  }
+
+
+  const dashboardTransactions =
+    document.getElementById(
+      "dashboardTransactions"
+    );
+
+  const dashboardRevenue =
+    document.getElementById(
+      "dashboardRevenue"
+    );
+
+
+  if(dashboardTransactions){
+
+    dashboardTransactions.textContent =
+      total;
+
+  }
+
+
+  if(dashboardRevenue){
+
+    dashboardRevenue.textContent =
+      formatRupiah(revenue);
+
+  }
+
+}
+
+
+function showTransactionDetail(id){
+
+  const tx =
+    transactions.find(
+      item => item.id === id
+    );
+
+
+  if(!tx) return;
+
+
+  alert(
+
+`TRANSAKSI
+
+ID: ${tx.id}
+
+User: ${tx.user}
+Email: ${tx.email}
+
+Foto: ${tx.photo}
+Jumlah: ${tx.quantity} foto
+
+Total: ${formatRupiah(tx.total)}
+
+Status: ${getStatusLabel(tx.status)}
+
+Tanggal: ${tx.date}`
+
+  );
+
+}
+
+
+/* =========================
+   PHOTO PREVIEW
+========================= */
+
+const photoInput =
+  document.getElementById(
+    "photoInput"
+  );
+
+
+if(photoInput){
+
+  photoInput.addEventListener(
+    "change",
+    previewPhotos
+  );
+
+}
+
+
+function previewPhotos(event){
+
+  const container =
+    document.getElementById(
+      "photoPreview"
+    );
+
+
+  if(!container) return;
+
+
+  container.innerHTML = "";
+
+
+  const files =
+    Array.from(
+      event.target.files || []
+    );
+
+
+  files.forEach(file => {
+
+
+    if(
+      !file.type.startsWith(
+        "image/"
+      )
+    ){
+
+      return;
+
+    }
+
+
+    const item =
+      document.createElement(
+        "div"
+      );
+
+
+    item.className =
+      "preview-item";
+
+
+    const img =
+      document.createElement(
+        "img"
+      );
+
+
+    img.src =
+      URL.createObjectURL(
+        file
+      );
+
+
+    img.alt =
+      "Preview";
+
+
+    img.onload = () => {
+
+      URL.revokeObjectURL(
+        img.src
+      );
+
+    };
+
+
+    const watermark =
+      document.createElement(
+        "div"
+      );
+
+
+    watermark.className =
+      "watermark";
+
+
+    watermark.textContent =
+      "momentra.";
+
+
+    item.appendChild(img);
+
+    item.appendChild(
+      watermark
+    );
+
+
+    container.appendChild(
+      item
+    );
+
+  });
+
+}
+
+
+/* =========================
+   LIVE PREVIEW
+========================= */
+
+function updatePreview(){
+
+  const teamA =
+    document.getElementById(
+      "teamA"
+    )?.value.trim();
+
+
+  const teamB =
+    document.getElementById(
+      "teamB"
+    )?.value.trim();
+
+
+  const photographer =
+    document.getElementById(
+      "photographer"
+    )?.value.trim();
+
+
+  const price =
+    document.getElementById(
+      "photoPrice"
+    )?.value;
+
+
+  const title =
+    document.getElementById(
+      "previewTitle"
+    );
+
+
+  const photographerEl =
+    document.getElementById(
+      "previewPhotographer"
+    );
+
+
+  const priceEl =
+    document.getElementById(
+      "previewPrice"
+    );
+
+
+  if(title){
+
+    title.textContent =
+      `${teamA || "Sekolah A"} vs ${teamB || "Sekolah B"}`;
+
+  }
+
+
+  if(photographerEl){
+
+    photographerEl.textContent =
+      photographer ||
+      "Fotografer";
+
+  }
+
+
+  if(priceEl){
+
+    priceEl.textContent =
+      formatRupiah(
+        price || 25000
+      );
+
+  }
+
+}
+
+
+document
+  .querySelectorAll(
+    "#buat input, #buat textarea, #buat select"
+  )
+  .forEach(input => {
+
+    input.addEventListener(
+      "input",
+      updatePreview
+    );
+
+    input.addEventListener(
+      "change",
+      updatePreview
+    );
+
+  });
+
+
+/* =========================
+   SAVE MOMENT
+========================= */
+
+function saveMoment(){
+
+  const eventName =
+    document.getElementById(
+      "eventName"
+    ).value.trim();
+
+
+  const cupName =
+    document.getElementById(
+      "cupName"
+    ).value.trim();
+
+
+  const teamA =
+    document.getElementById(
+      "teamA"
+    ).value.trim();
+
+
+  const teamB =
+    document.getElementById(
+      "teamB"
+    ).value.trim();
+
+
+  const photoFiles =
+    document.getElementById(
+      "photoInput"
+    ).files;
+
+
+  if(!eventName){
+
+    alert(
+      "Nama olahraga / event wajib diisi."
+    );
+
+    return;
+
+  }
+
+
+  if(!cupName){
+
+    alert(
+      "Nama cup wajib diisi."
+    );
+
+    return;
+
+  }
+
+
+  if(!teamA || !teamB){
+
+    alert(
+      "Sekolah A dan Sekolah B wajib diisi."
+    );
+
+    return;
+
+  }
+
+
+  if(!photoFiles.length){
+
+    alert(
+      "Pilih minimal satu foto."
+    );
+
+    return;
+
+  }
+
+
+  alert(
+    "Momen siap disimpan.\n\n" +
+    "Integrasi API akan dilakukan pada tahap berikutnya."
+  );
+
+}
+
+
+/* =========================
+   PAYMENT
+========================= */
+
+function savePaymentConfig(){
+
+  const baseUrl =
+    document.getElementById(
+      "paymentBaseUrl"
+    ).value.trim();
+
+
+  if(!baseUrl){
+
+    alert(
+      "Base URL wajib diisi."
+    );
+
+    return;
+
+  }
+
+
+  localStorage.setItem(
+    "momentra_payment_base_url",
+    baseUrl
+  );
+
+
+  alert(
+    "Konfigurasi berhasil disimpan."
+  );
+
+}
+
+
+async function testConnection(){
+
+  const baseUrl =
+    document.getElementById(
+      "paymentBaseUrl"
+    ).value.trim();
+
+
+  if(!baseUrl){
+
+    alert(
+      "Base URL belum diisi."
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    const response =
+      await fetch(
+        baseUrl,
+        {
+          method:"GET"
+        }
+      );
+
+
+    if(response.ok){
+
+      alert(
+        "Connection berhasil."
+      );
+
+    }else{
+
+      alert(
+        "Server merespons HTTP " +
+        response.status
+      );
+
+    }
+
+  }catch(error){
+
+    alert(
+      "Connection gagal."
+    );
+
+  }
+
+}
+
+
+/* =========================
+   LOGOUT
+========================= */
+
+function logout(){
+
+  localStorage.removeItem(
+    "momentra_token"
+  );
+
+  localStorage.removeItem(
+    "momentra_user"
+  );
+
+  localStorage.removeItem(
+    "momentra_logged_in"
+  );
+
+  localStorage.removeItem(
+    "momentra_remember"
+  );
+
+
+  window.location.href =
+    "login.html";
+
+}
+
+
+/* =========================
+   INITIALIZE
+========================= */
+
+renderUsers();
+
+loadTransactions();
+
+updatePreview();
+
+</script>
+
+</body>
+</html>
