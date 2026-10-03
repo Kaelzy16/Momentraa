@@ -19,6 +19,8 @@
     --text:#fff;
     --muted:#8d8d8d;
     --muted2:#666;
+    --success:#72e08b;
+    --danger:#ff6b6b;
 }
 
 *{
@@ -478,6 +480,12 @@ main{
     overflow:hidden;
     background:var(--card);
     border:1px solid var(--border);
+    cursor:pointer;
+    transition:.2s;
+}
+
+.photo-card:hover{
+    border-color:#444;
 }
 
 .photo-card img{
@@ -733,6 +741,229 @@ main{
 
 
 /* =========================================
+   PAYMENT MODAL
+   Tambahan fitur pembelian.
+========================================= */
+
+.payment-modal{
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    background:rgba(0,0,0,.78);
+    backdrop-filter:blur(12px);
+}
+
+.payment-modal.show{
+    display:flex;
+}
+
+.payment-box{
+    width:min(460px,100%);
+    max-height:90vh;
+    overflow-y:auto;
+    background:#111;
+    border:1px solid #292929;
+    border-radius:25px;
+    padding:24px;
+    box-shadow:0 30px 100px rgba(0,0,0,.65);
+}
+
+.payment-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:15px;
+}
+
+.payment-head h2{
+    font-size:22px;
+}
+
+.payment-close{
+    width:38px;
+    height:38px;
+    border-radius:50%;
+    background:#1b1b1b;
+    border:1px solid #292929;
+    color:#aaa;
+}
+
+.payment-close:hover{
+    color:#fff;
+    background:#242424;
+}
+
+.payment-photo{
+    width:100%;
+    max-height:240px;
+    object-fit:cover;
+    border-radius:17px;
+    margin-top:18px;
+    border:1px solid #292929;
+}
+
+.payment-title{
+    margin-top:18px;
+    font-size:17px;
+    font-weight:600;
+}
+
+.payment-price{
+    margin-top:6px;
+    color:#999;
+}
+
+.payment-status{
+    margin-top:18px;
+    padding:13px;
+    border-radius:14px;
+    background:#171717;
+    border:1px solid #292929;
+    color:#aaa;
+    font-size:13px;
+    line-height:1.5;
+}
+
+.payment-status.success{
+    color:var(--success);
+    border-color:rgba(114,224,139,.25);
+}
+
+.payment-status.error{
+    color:var(--danger);
+    border-color:rgba(255,107,107,.25);
+}
+
+.payment-action{
+    width:100%;
+    margin-top:18px;
+    min-height:50px;
+    padding:12px 18px;
+    border-radius:14px;
+    background:#fff;
+    color:#000;
+    font-weight:700;
+}
+
+.payment-action:hover{
+    background:#e8e8e8;
+}
+
+.payment-action.secondary{
+    background:#1b1b1b;
+    color:#fff;
+    border:1px solid #303030;
+}
+
+.payment-action:disabled{
+    opacity:.5;
+    cursor:not-allowed;
+}
+
+.qris-area{
+    margin-top:20px;
+    display:none;
+    text-align:center;
+}
+
+.qris-area.show{
+    display:block;
+}
+
+.qris-label{
+    color:#888;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:1.4px;
+    margin-bottom:12px;
+}
+
+.qris-image{
+    width:240px;
+    height:240px;
+    max-width:100%;
+    object-fit:contain;
+    background:#fff;
+    padding:12px;
+    border-radius:15px;
+    display:block;
+    margin:auto;
+}
+
+.qris-note{
+    color:#666;
+    font-size:12px;
+    line-height:1.6;
+    margin-top:12px;
+}
+
+.payment-loader{
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    border:2px solid #444;
+    border-top-color:#fff;
+    animation:paymentSpin .8s linear infinite;
+    display:inline-block;
+    vertical-align:middle;
+    margin-right:8px;
+}
+
+@keyframes paymentSpin{
+    to{
+        transform:rotate(360deg);
+    }
+}
+
+.payment-download{
+    display:none;
+}
+
+.payment-download.show{
+    display:block;
+}
+
+.payment-transaction{
+    margin-top:10px;
+    color:#555;
+    font-size:11px;
+    word-break:break-all;
+}
+
+
+/* =========================================
+   TOAST
+========================================= */
+
+.momentra-toast{
+    position:fixed;
+    left:50%;
+    bottom:95px;
+    transform:translateX(-50%) translateY(15px);
+    z-index:2000;
+    max-width:calc(100% - 32px);
+    padding:12px 17px;
+    border-radius:999px;
+    background:#fff;
+    color:#000;
+    font-size:13px;
+    font-weight:600;
+    opacity:0;
+    pointer-events:none;
+    transition:.25s;
+}
+
+.momentra-toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+}
+
+
+/* =========================================
    BOTTOM NAV
 ========================================= */
 
@@ -839,6 +1070,16 @@ main{
 
     .profile-page{
         padding-top:25px;
+    }
+
+    .payment-box{
+        padding:18px;
+        border-radius:20px;
+    }
+
+    .qris-image{
+        width:210px;
+        height:210px;
     }
 }
 </style>
@@ -1258,7 +1499,7 @@ main{
 
             <button
                 class="profile-item"
-                onclick="showComingSoon('Foto Saya')"
+                onclick="showPurchasedPhotos()"
             >
 
                 <div class="profile-item-icon">
@@ -1417,6 +1658,136 @@ main{
 
 
 <!-- =========================================
+     PAYMENT MODAL
+========================================= -->
+
+<div
+    id="paymentModal"
+    class="payment-modal"
+    onclick="closePaymentOutside(event)"
+>
+
+    <div
+        class="payment-box"
+        onclick="event.stopPropagation()"
+    >
+
+        <div class="payment-head">
+
+            <div>
+
+                <h2>
+                    Beli Foto
+                </h2>
+
+            </div>
+
+            <button
+                class="payment-close"
+                onclick="closePaymentModal()"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <img
+            id="paymentPhoto"
+            class="payment-photo"
+            src=""
+            alt="Foto Momentra"
+        >
+
+
+        <div
+            id="paymentTitle"
+            class="payment-title"
+        >
+            Foto Momentra
+        </div>
+
+
+        <div
+            id="paymentPrice"
+            class="payment-price"
+        >
+            Rp 0
+        </div>
+
+
+        <div
+            id="paymentStatus"
+            class="payment-status"
+        >
+            Siap untuk melakukan pembayaran.
+        </div>
+
+
+        <div
+            id="qrisArea"
+            class="qris-area"
+        >
+
+            <div class="qris-label">
+                Scan QRIS
+            </div>
+
+            <img
+                id="qrisImage"
+                class="qris-image"
+                src=""
+                alt="QRIS pembayaran"
+            >
+
+            <div class="qris-note">
+                Scan QRIS menggunakan aplikasi pembayaran
+                yang mendukung QRIS. Setelah pembayaran,
+                tekan tombol cek pembayaran.
+            </div>
+
+        </div>
+
+
+        <button
+            id="buyButton"
+            class="payment-action"
+            onclick="createPayment()"
+        >
+            Beli Sekarang
+        </button>
+
+
+        <button
+            id="checkPaymentButton"
+            class="payment-action secondary"
+            onclick="checkPaymentStatus()"
+            style="display:none"
+        >
+            Cek Pembayaran
+        </button>
+
+
+        <button
+            id="downloadButton"
+            class="payment-action payment-download"
+            onclick="downloadPurchasedPhoto()"
+        >
+            Download Foto Original
+        </button>
+
+
+        <div
+            id="paymentTransaction"
+            class="payment-transaction"
+        ></div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================
      BOTTOM NAV
 ========================================= -->
 
@@ -1450,6 +1821,12 @@ main{
     </button>
 
 </nav>
+
+
+<div
+    id="momentraToast"
+    class="momentra-toast"
+></div>
 
 
 <script>
@@ -1487,6 +1864,8 @@ const demoEvents = [
 
                 photos:[
                     {
+                        id:"demo-photo-1",
+
                         image_url:
                         "https://images.unsplash.com/photo-1518065896235-a4c93e088e7d?auto=format&fit=crop&w=900&q=80",
 
@@ -1561,6 +1940,12 @@ let currentEvent = null;
 
 let currentMatch = null;
 
+let selectedPhoto = null;
+
+let currentTransactionId = null;
+
+let paymentPolling = null;
+
 
 /* =========================================
    INIT
@@ -1603,9 +1988,8 @@ function loadProfile(){
 
 
     /*
-       Login masih dimatikan.
-       Jika tidak ada user login,
-       gunakan data demo.
+       Jika belum ada user login,
+       gunakan data demo seperti versi asli.
     */
 
     if(!user){
@@ -1647,11 +2031,6 @@ function loadProfile(){
         .textContent =
             getInitial(name);
 
-
-    /*
-       Statistik demo.
-       Nanti bisa diganti dengan data API.
-    */
 
     document
         .getElementById("purchasedCount")
@@ -1785,6 +2164,36 @@ function updateBottomNav(active){
             .classList.add("active");
 
     }
+
+}
+
+
+/* =========================================
+   AUTH
+========================================= */
+
+function getToken(){
+
+    return localStorage.getItem(
+        "momentra_token"
+    ) || "";
+
+}
+
+
+function authHeaders(){
+
+    const token =
+        getToken();
+
+    if(!token){
+        return {};
+    }
+
+    return {
+        "Authorization":
+            `Bearer ${token}`
+    };
 
 }
 
@@ -1930,7 +2339,7 @@ function renderEvents(){
 
                 <article
                     class="event-card"
-                    onclick="openEvent('${event.id}')"
+                    onclick="openEvent('${escapeAttribute(event.id)}')"
                 >
 
                     <img
@@ -1946,7 +2355,7 @@ function renderEvents(){
                     <div class="event-info">
 
                         <small>
-                            ${event.category || "Event"}
+                            ${escapeHTML(event.category || "Event")}
                         </small>
 
 
@@ -2079,9 +2488,115 @@ function openEvent(eventId){
             "Pertandingan dalam event ini";
 
 
+    /*
+       Jika event dari API hanya punya id
+       dan belum memiliki matches,
+       coba ambil matches dari API.
+    */
+
+    if(
+        !Array.isArray(event.matches) ||
+        event.matches.length === 0
+    ){
+
+        loadMatchesForEvent(event);
+
+        return;
+
+    }
+
+
     renderMatches(
         event.matches || []
     );
+
+
+    window.scrollTo({
+        top:0,
+        behavior:"smooth"
+    });
+
+}
+
+
+/* =========================================
+   LOAD MATCHES FROM API
+========================================= */
+
+async function loadMatchesForEvent(event){
+
+    const list =
+        document.getElementById(
+            "matchList"
+        );
+
+
+    list.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">
+                ⏳
+            </div>
+
+            <h3>
+                Memuat pertandingan
+            </h3>
+
+            <p>
+                Sedang mengambil data pertandingan...
+            </p>
+        </div>
+    `;
+
+
+    try{
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/matches?event_id=${encodeURIComponent(event.id)}`
+            );
+
+
+        if(!response.ok){
+            throw new Error(
+                "Gagal mengambil pertandingan"
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        const matches =
+            Array.isArray(data)
+                ? data
+                : (
+                    data.matches ||
+                    data.data ||
+                    []
+                );
+
+
+        event.matches =
+            matches;
+
+
+        renderMatches(
+            matches
+        );
+
+
+    }catch(error){
+
+        console.error(error);
+
+        event.matches =
+            [];
+
+
+        renderMatches([]);
+
+    }
 
 
     window.scrollTo({
@@ -2115,7 +2630,7 @@ function renderMatches(
 
                 "Pertandingan belum tersedia",
 
-                `Belum ada pertandingan yang ditambahkan ke event "${escapeHTML(currentEvent.name)}".`,
+                `Belum ada pertandingan yang ditambahkan ke event "${escapeHTML(currentEvent?.name || "ini")}".`,
 
                 "Kembali ke event"
 
@@ -2133,7 +2648,7 @@ function renderMatches(
 
                     <article
                         class="match-card"
-                        onclick="openMatch('${match.id}')"
+                        onclick="openMatch('${escapeAttribute(match.id)}')"
                     >
 
                         <div class="match-label">
@@ -2146,6 +2661,7 @@ function renderMatches(
                             <div class="team">
                                 ${escapeHTML(
                                     match.team_a ||
+                                    match.teamA ||
                                     "Tim A"
                                 )}
                             </div>
@@ -2159,6 +2675,7 @@ function renderMatches(
                             <div class="team">
                                 ${escapeHTML(
                                     match.team_b ||
+                                    match.teamB ||
                                     "Tim B"
                                 )}
                             </div>
@@ -2168,7 +2685,8 @@ function renderMatches(
 
                         <div class="match-date">
                             ${formatDate(
-                                match.match_date
+                                match.match_date ||
+                                match.date
                             )}
                         </div>
 
@@ -2185,9 +2703,9 @@ function renderMatches(
    OPEN MATCH
 ========================================= */
 
-function openMatch(matchId){
+async function openMatch(matchId){
 
-    const match =
+    let match =
         (
             currentEvent?.matches ||
             []
@@ -2228,7 +2746,7 @@ function openMatch(matchId){
             "matchTitle"
         )
         .textContent =
-            `${match.team_a || "Tim A"} vs ${match.team_b || "Tim B"}`;
+            `${match.team_a || match.teamA || "Tim A"} vs ${match.team_b || match.teamB || "Tim B"}`;
 
 
     document
@@ -2239,15 +2757,109 @@ function openMatch(matchId){
             "Foto pertandingan";
 
 
-    renderPhotos(
-        match.photos || []
-    );
+    /*
+       Jika matches dari API belum mempunyai
+       photos, ambil foto dari endpoint.
+    */
+
+    if(!Array.isArray(match.photos)){
+
+        await loadPhotosForMatch(match);
+
+    }else{
+
+        renderPhotos(
+            match.photos || []
+        );
+
+    }
 
 
     window.scrollTo({
         top:0,
         behavior:"smooth"
     });
+
+}
+
+
+/* =========================================
+   LOAD PHOTOS
+========================================= */
+
+async function loadPhotosForMatch(match){
+
+    const grid =
+        document.getElementById(
+            "photoGrid"
+        );
+
+
+    grid.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">
+                ⏳
+            </div>
+
+            <h3>
+                Memuat foto
+            </h3>
+
+            <p>
+                Sedang mengambil foto pertandingan...
+            </p>
+        </div>
+    `;
+
+
+    try{
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/photos?match_id=${encodeURIComponent(match.id)}`
+            );
+
+
+        if(!response.ok){
+            throw new Error(
+                "Gagal mengambil foto"
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        const photos =
+            Array.isArray(data)
+                ? data
+                : (
+                    data.photos ||
+                    data.data ||
+                    []
+                );
+
+
+        match.photos =
+            photos;
+
+
+        renderPhotos(
+            photos
+        );
+
+
+    }catch(error){
+
+        console.error(error);
+
+        match.photos =
+            [];
+
+        renderPhotos([]);
+
+    }
 
 }
 
@@ -2293,11 +2905,17 @@ function renderPhotos(
 
                     <article
                         class="photo-card"
+                        onclick="openPhoto('${escapeAttribute(photo.id || "")}')"
                     >
 
                         <img
-                            src="${photo.image_url}"
-                            alt="${escapeHTML(
+                            src="${escapeAttribute(
+                                photo.image_url ||
+                                photo.preview_url ||
+                                photo.file_url ||
+                                ""
+                            )}"
+                            alt="${escapeAttribute(
                                 photo.title ||
                                 "Foto Momentra"
                             )}"
@@ -2329,6 +2947,1288 @@ function renderPhotos(
                 `
             )
             .join("");
+
+}
+
+
+/* =========================================
+   PHOTO PURCHASE
+========================================= */
+
+function openPhoto(photoId){
+
+    if(!currentMatch){
+        return;
+    }
+
+
+    const photo =
+        (
+            currentMatch.photos ||
+            []
+        ).find(
+            item =>
+                String(item.id) ===
+                String(photoId)
+        );
+
+
+    if(!photo){
+
+        showToast(
+            "Foto tidak ditemukan."
+        );
+
+        return;
+
+    }
+
+
+    selectedPhoto =
+        photo;
+
+
+    currentTransactionId =
+        null;
+
+
+    stopPaymentPolling();
+
+
+    resetPaymentModal();
+
+
+    document
+        .getElementById(
+            "paymentPhoto"
+        )
+        .src =
+            photo.image_url ||
+            photo.preview_url ||
+            photo.file_url ||
+            "";
+
+
+    document
+        .getElementById(
+            "paymentTitle"
+        )
+        .textContent =
+            photo.title ||
+            "Foto Momentra";
+
+
+    document
+        .getElementById(
+            "paymentPrice"
+        )
+        .textContent =
+            `Rp ${formatPrice(
+                photo.price || 0
+            )}`;
+
+
+    document
+        .getElementById(
+            "paymentModal"
+        )
+        .classList.add(
+            "show"
+        );
+
+
+    /*
+       Jika user sudah pernah membayar,
+       coba cek koleksi pembelian terlebih dahulu.
+    */
+
+    checkExistingPurchase(
+        photo
+    );
+
+}
+
+
+/* =========================================
+   RESET PAYMENT MODAL
+========================================= */
+
+function resetPaymentModal(){
+
+    document
+        .getElementById(
+            "paymentStatus"
+        )
+        .className =
+            "payment-status";
+
+
+    document
+        .getElementById(
+            "paymentStatus"
+        )
+        .innerHTML =
+            "Siap untuk melakukan pembayaran.";
+
+
+    document
+        .getElementById(
+            "qrisArea"
+        )
+        .classList.remove(
+            "show"
+        );
+
+
+    document
+        .getElementById(
+            "qrisImage"
+        )
+        .removeAttribute(
+            "src"
+        );
+
+
+    document
+        .getElementById(
+            "buyButton"
+        )
+        .style.display =
+            "block";
+
+
+    document
+        .getElementById(
+            "buyButton"
+        )
+        .disabled =
+            false;
+
+
+    document
+        .getElementById(
+            "buyButton"
+        )
+        .textContent =
+            "Beli Sekarang";
+
+
+    document
+        .getElementById(
+            "checkPaymentButton"
+        )
+        .style.display =
+            "none";
+
+
+    document
+        .getElementById(
+            "downloadButton"
+        )
+        .classList.remove(
+            "show"
+        );
+
+
+    document
+        .getElementById(
+            "paymentTransaction"
+        )
+        .textContent =
+            "";
+
+}
+
+
+/* =========================================
+   CLOSE PAYMENT
+========================================= */
+
+function closePaymentModal(){
+
+    stopPaymentPolling();
+
+    selectedPhoto = null;
+
+    currentTransactionId = null;
+
+
+    document
+        .getElementById(
+            "paymentModal"
+        )
+        .classList.remove(
+            "show"
+        );
+
+}
+
+
+function closePaymentOutside(event){
+
+    if(
+        event.target.id ===
+        "paymentModal"
+    ){
+
+        closePaymentModal();
+
+    }
+
+}
+
+
+/* =========================================
+   CREATE PAYMENT
+========================================= */
+
+async function createPayment(){
+
+    if(!selectedPhoto){
+
+        showToast(
+            "Foto belum dipilih."
+        );
+
+        return;
+
+    }
+
+
+    const token =
+        getToken();
+
+
+    if(!token){
+
+        showToast(
+            "Silakan login terlebih dahulu."
+        );
+
+        setTimeout(
+            () => {
+                location.href =
+                    "login.html";
+            },
+            700
+        );
+
+        return;
+
+    }
+
+
+    const buyButton =
+        document.getElementById(
+            "buyButton"
+        );
+
+
+    buyButton.disabled =
+        true;
+
+
+    buyButton.innerHTML = `
+        <span class="payment-loader"></span>
+        Membuat pembayaran...
+    `;
+
+
+    setPaymentStatus(
+        "Sedang membuat pembayaran QRIS...",
+        "normal"
+    );
+
+
+    try{
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/payment/create`,
+                {
+                    method:"POST",
+
+                    headers:{
+                        "Content-Type":
+                            "application/json",
+
+                        "Authorization":
+                            `Bearer ${token}`
+                    },
+
+                    body:JSON.stringify({
+
+                        photo_ids:[
+                            selectedPhoto.id
+                        ]
+
+                    })
+
+                }
+            );
+
+
+        const data =
+            await parseResponse(
+                response
+            );
+
+
+        if(!response.ok){
+
+            throw new Error(
+                getApiError(
+                    data,
+                    "Gagal membuat pembayaran."
+                )
+            );
+
+        }
+
+
+        const transaction =
+            extractTransaction(
+                data
+            );
+
+
+        currentTransactionId =
+            transaction.txn_id ||
+            transaction.transaction_id ||
+            transaction.id ||
+            data.txn_id ||
+            data.transaction_id ||
+            data.id ||
+            null;
+
+
+        if(!currentTransactionId){
+
+            throw new Error(
+                "ID transaksi tidak ditemukan dari server."
+            );
+
+        }
+
+
+        const qrisValue =
+            transaction.qris_string ||
+            transaction.qris ||
+            data.qris_string ||
+            data.qris ||
+            transaction.qris_code ||
+            data.qris_code ||
+            "";
+
+
+        const qrisImage =
+            transaction.qris_image ||
+            transaction.qris_url ||
+            data.qris_image ||
+            data.qris_url ||
+            "";
+
+
+        const paymentUrl =
+            transaction.payment_url ||
+            data.payment_url ||
+            "";
+
+
+        showQris(
+            qrisValue,
+            qrisImage,
+            paymentUrl
+        );
+
+
+        document
+            .getElementById(
+                "paymentTransaction"
+            )
+            .textContent =
+                `Transaksi: ${currentTransactionId}`;
+
+
+        document
+            .getElementById(
+                "buyButton"
+            )
+            .style.display =
+                "none";
+
+
+        document
+            .getElementById(
+                "checkPaymentButton"
+            )
+            .style.display =
+                "block";
+
+
+        document
+            .getElementById(
+                "checkPaymentButton"
+            )
+            .disabled =
+                false;
+
+
+        setPaymentStatus(
+            "Silakan selesaikan pembayaran menggunakan QRIS. Setelah membayar, tekan Cek Pembayaran.",
+            "normal"
+        );
+
+
+        startPaymentPolling();
+
+
+    }catch(error){
+
+        console.error(error);
+
+
+        setPaymentStatus(
+            error.message ||
+            "Pembayaran gagal dibuat.",
+            "error"
+        );
+
+
+        buyButton.disabled =
+            false;
+
+
+        buyButton.textContent =
+            "Coba Lagi";
+
+    }
+
+}
+
+
+/* =========================================
+   SHOW QRIS
+========================================= */
+
+function showQris(
+    qrisValue,
+    qrisImage,
+    paymentUrl
+){
+
+    const area =
+        document.getElementById(
+            "qrisArea"
+        );
+
+
+    const image =
+        document.getElementById(
+            "qrisImage"
+        );
+
+
+    /*
+       Prioritas:
+       1. URL gambar QRIS dari API
+       2. QRIS string dibuat menjadi QR image
+       3. payment URL dibuat menjadi QR image
+    */
+
+    let source =
+        qrisImage || "";
+
+
+    if(!source){
+
+        const qrText =
+            qrisValue ||
+            paymentUrl ||
+            "";
+
+
+        if(qrText){
+
+            source =
+                "https://quickchart.io/qr" +
+                "?size=500" +
+                "&margin=2" +
+                "&text=" +
+                encodeURIComponent(
+                    qrText
+                );
+
+        }
+
+    }
+
+
+    if(source){
+
+        image.src =
+            source;
+
+        area.classList.add(
+            "show"
+        );
+
+    }else{
+
+        area.classList.remove(
+            "show"
+        );
+
+        setPaymentStatus(
+            "QRIS belum diberikan oleh server pembayaran.",
+            "error"
+        );
+
+    }
+
+}
+
+
+/* =========================================
+   CHECK PAYMENT STATUS
+========================================= */
+
+async function checkPaymentStatus(){
+
+    if(!currentTransactionId){
+
+        showToast(
+            "Transaksi belum tersedia."
+        );
+
+        return;
+
+    }
+
+
+    const token =
+        getToken();
+
+
+    if(!token){
+
+        showToast(
+            "Sesi login tidak ditemukan."
+        );
+
+        return;
+
+    }
+
+
+    const button =
+        document.getElementById(
+            "checkPaymentButton"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.innerHTML = `
+        <span class="payment-loader"></span>
+        Mengecek...
+    `;
+
+
+    try{
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/payment/status/${encodeURIComponent(currentTransactionId)}`,
+                {
+                    method:"GET",
+
+                    headers:{
+                        "Authorization":
+                            `Bearer ${token}`
+                    }
+                }
+            );
+
+
+        const data =
+            await parseResponse(
+                response
+            );
+
+
+        if(!response.ok){
+
+            throw new Error(
+                getApiError(
+                    data,
+                    "Gagal mengecek pembayaran."
+                )
+            );
+
+        }
+
+
+        const transaction =
+            extractTransaction(
+                data
+            );
+
+
+        const status =
+            String(
+                transaction.status ||
+                data.status ||
+                ""
+            )
+            .toLowerCase();
+
+
+        if(
+            isPaymentSuccess(
+                status
+            )
+        ){
+
+            handlePaymentSuccess();
+
+            return;
+
+        }
+
+
+        if(
+            isPaymentFailed(
+                status
+            )
+        ){
+
+            setPaymentStatus(
+                `Pembayaran berstatus: ${status}`,
+                "error"
+            );
+
+        }else{
+
+            setPaymentStatus(
+                `Pembayaran belum selesai. Status: ${status || "pending"}`,
+                "normal"
+            );
+
+        }
+
+
+    }catch(error){
+
+        console.error(error);
+
+        setPaymentStatus(
+            error.message ||
+            "Gagal mengecek status pembayaran.",
+            "error"
+        );
+
+    }finally{
+
+        button.disabled =
+            false;
+
+        button.textContent =
+            "Cek Pembayaran";
+
+    }
+
+}
+
+
+/* =========================================
+   PAYMENT SUCCESS
+========================================= */
+
+function handlePaymentSuccess(){
+
+    stopPaymentPolling();
+
+
+    setPaymentStatus(
+        "Pembayaran berhasil! Foto original sudah tersedia untuk di-download.",
+        "success"
+    );
+
+
+    document
+        .getElementById(
+            "checkPaymentButton"
+        )
+        .style.display =
+            "none";
+
+
+    document
+        .getElementById(
+            "downloadButton"
+        )
+        .classList.add(
+            "show"
+        );
+
+
+    showToast(
+        "Pembayaran berhasil."
+    );
+
+
+    refreshPurchasedCount();
+
+}
+
+
+/* =========================================
+   PAYMENT POLLING
+========================================= */
+
+function startPaymentPolling(){
+
+    stopPaymentPolling();
+
+
+    paymentPolling =
+        setInterval(
+            () => {
+
+                if(
+                    !currentTransactionId ||
+                    !selectedPhoto
+                ){
+
+                    return;
+
+                }
+
+
+                checkPaymentStatus();
+
+            },
+            10000
+        );
+
+}
+
+
+function stopPaymentPolling(){
+
+    if(paymentPolling){
+
+        clearInterval(
+            paymentPolling
+        );
+
+        paymentPolling =
+            null;
+
+    }
+
+}
+
+
+/* =========================================
+   CHECK EXISTING PURCHASE
+========================================= */
+
+async function checkExistingPurchase(
+    photo
+){
+
+    const token =
+        getToken();
+
+
+    if(!token){
+        return;
+    }
+
+
+    try{
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/purchased-photos`,
+                {
+                    method:"GET",
+
+                    headers:{
+                        "Authorization":
+                            `Bearer ${token}`
+                    }
+                }
+            );
+
+
+        if(!response.ok){
+            return;
+        }
+
+
+        const data =
+            await response.json();
+
+
+        const purchased =
+            Array.isArray(data)
+                ? data
+                : (
+                    data.photos ||
+                    data.data ||
+                    data.purchased_photos ||
+                    []
+                );
+
+
+        const found =
+            purchased.some(
+                item => {
+
+                    const id =
+                        item.photo_id ||
+                        item.id;
+
+                    return String(id) ===
+                        String(photo.id);
+
+                }
+            );
+
+
+        if(found){
+
+            handlePaymentSuccess();
+
+        }
+
+    }catch(error){
+
+        console.log(
+            "Belum dapat mengecek koleksi pembelian.",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================
+   DOWNLOAD ORIGINAL
+========================================= */
+
+async function downloadPurchasedPhoto(){
+
+    if(!selectedPhoto){
+
+        showToast(
+            "Foto belum dipilih."
+        );
+
+        return;
+
+    }
+
+
+    const token =
+        getToken();
+
+
+    if(!token){
+
+        showToast(
+            "Silakan login terlebih dahulu."
+        );
+
+        return;
+
+    }
+
+
+    const button =
+        document.getElementById(
+            "downloadButton"
+        );
+
+
+    button.disabled =
+        true;
+
+
+    button.innerHTML = `
+        <span class="payment-loader"></span>
+        Menyiapkan foto...
+    `;
+
+
+    try{
+
+        /*
+           Endpoint ini harus memeriksa:
+           - user login
+           - user sudah membayar foto
+           - lalu mengambil ORIGINAL
+           dari GitHub/private storage Worker.
+        */
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/photos/${encodeURIComponent(selectedPhoto.id)}/download`,
+                {
+                    method:"GET",
+
+                    headers:{
+                        "Authorization":
+                            `Bearer ${token}`
+                    }
+                }
+            );
+
+
+        if(!response.ok){
+
+            const data =
+                await parseResponse(
+                    response
+                );
+
+
+            throw new Error(
+                getApiError(
+                    data,
+                    "Foto belum dapat di-download."
+                )
+            );
+
+        }
+
+
+        const blob =
+            await response.blob();
+
+
+        const contentType =
+            response.headers.get(
+                "Content-Type"
+            ) ||
+            "image/jpeg";
+
+
+        const extension =
+            getFileExtension(
+                contentType,
+                selectedPhoto.title
+            );
+
+
+        const fileName =
+            sanitizeFileName(
+                selectedPhoto.title ||
+                "momentra-photo"
+            ) +
+            extension;
+
+
+        const url =
+            URL.createObjectURL(
+                blob
+            );
+
+
+        const link =
+            document.createElement(
+                "a"
+            );
+
+
+        link.href =
+            url;
+
+        link.download =
+            fileName;
+
+        document
+            .body
+            .appendChild(
+                link
+            );
+
+        link.click();
+
+        link.remove();
+
+
+        setTimeout(
+            () => {
+
+                URL.revokeObjectURL(
+                    url
+                );
+
+            },
+            1000
+        );
+
+
+        showToast(
+            "Foto original berhasil di-download."
+        );
+
+
+    }catch(error){
+
+        console.error(error);
+
+
+        showToast(
+            error.message ||
+            "Gagal download foto."
+        );
+
+    }finally{
+
+        button.disabled =
+            false;
+
+        button.textContent =
+            "Download Foto Original";
+
+    }
+
+}
+
+
+/* =========================================
+   PURCHASED PHOTOS
+========================================= */
+
+async function showPurchasedPhotos(){
+
+    const token =
+        getToken();
+
+
+    if(!token){
+
+        showToast(
+            "Silakan login terlebih dahulu."
+        );
+
+        return;
+
+    }
+
+
+    try{
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/purchased-photos`,
+                {
+                    headers:{
+                        "Authorization":
+                            `Bearer ${token}`
+                    }
+                }
+            );
+
+
+        const data =
+            await parseResponse(
+                response
+            );
+
+
+        if(!response.ok){
+
+            throw new Error(
+                getApiError(
+                    data,
+                    "Gagal mengambil foto yang dibeli."
+                )
+            );
+
+        }
+
+
+        const photos =
+            Array.isArray(data)
+                ? data
+                : (
+                    data.photos ||
+                    data.data ||
+                    data.purchased_photos ||
+                    []
+                );
+
+
+        if(!photos.length){
+
+            alert(
+                "Belum ada foto yang dibeli."
+            );
+
+            return;
+
+        }
+
+
+        /*
+           Tetap menggunakan tampilan dasar Momentra.
+           Foto dibeli dapat dibuka dari daftar pembelian.
+        */
+
+        currentEvent = null;
+
+        currentMatch = {
+            id:"purchased",
+            team_a:"Foto",
+            team_b:"Saya",
+            photos:photos
+        };
+
+
+        hideAllViews();
+
+
+        document
+            .getElementById(
+                "matchView"
+            )
+            .classList.add(
+                "active"
+            );
+
+
+        document
+            .getElementById(
+                "matchTitle"
+            )
+            .textContent =
+                "Foto Saya";
+
+
+        document
+            .getElementById(
+                "matchSubtitle"
+            )
+            .textContent =
+                "Foto yang sudah kamu beli";
+
+
+        renderPhotos(
+            photos
+        );
+
+
+        updateBottomNav(
+            "none"
+        );
+
+
+    }catch(error){
+
+        console.error(error);
+
+        showToast(
+            error.message ||
+            "Gagal mengambil foto."
+        );
+
+    }
+
+}
+
+
+/* =========================================
+   REFRESH PURCHASE COUNT
+========================================= */
+
+async function refreshPurchasedCount(){
+
+    const token =
+        getToken();
+
+
+    if(!token){
+        return;
+    }
+
+
+    try{
+
+        const response =
+            await fetch(
+                `${API_BASE}/api/purchased-photos`,
+                {
+                    headers:{
+                        "Authorization":
+                            `Bearer ${token}`
+                    }
+                }
+            );
+
+
+        if(!response.ok){
+            return;
+        }
+
+
+        const data =
+            await response.json();
+
+
+        const photos =
+            Array.isArray(data)
+                ? data
+                : (
+                    data.photos ||
+                    data.data ||
+                    data.purchased_photos ||
+                    []
+                );
+
+
+        document
+            .getElementById(
+                "purchasedCount"
+            )
+            .textContent =
+                photos.length;
+
+
+        const user =
+            JSON.parse(
+                localStorage.getItem(
+                    "momentra_user"
+                ) || "{}"
+            );
+
+
+        user.purchased_count =
+            photos.length;
+
+
+        localStorage.setItem(
+            "momentra_user",
+            JSON.stringify(user)
+        );
+
+
+    }catch(error){
+
+        console.log(
+            "Gagal refresh jumlah pembelian.",
+            error
+        );
+
+    }
 
 }
 
@@ -2561,7 +4461,7 @@ function searchEvents(){
 
                     <article
                         class="event-card"
-                        onclick="openEvent('${event.id}')"
+                        onclick="openEvent('${escapeAttribute(event.id)}')"
                     >
 
                         <img
@@ -2577,7 +4477,7 @@ function searchEvents(){
                         <div class="event-info">
 
                             <small>
-                                ${event.category || "Event"}
+                                ${escapeHTML(event.category || "Event")}
                             </small>
 
 
@@ -2667,6 +4567,9 @@ function showComingSoon(
 
 function logout(){
 
+    stopPaymentPolling();
+
+
     localStorage.removeItem(
         "momentra_token"
     );
@@ -2686,6 +4589,406 @@ function logout(){
 
     location.href =
         "login.html";
+
+}
+
+
+/* =========================================
+   PAYMENT HELPERS
+========================================= */
+
+async function parseResponse(
+    response
+){
+
+    const text =
+        await response.text();
+
+
+    if(!text){
+        return {};
+    }
+
+
+    try{
+
+        return JSON.parse(
+            text
+        );
+
+    }catch(error){
+
+        return {
+            message:text
+        };
+
+    }
+
+}
+
+
+function extractTransaction(
+    data
+){
+
+    if(
+        data &&
+        data.transaction
+    ){
+
+        return data.transaction;
+
+    }
+
+
+    if(
+        data &&
+        data.data &&
+        data.data.transaction
+    ){
+
+        return data.data.transaction;
+
+    }
+
+
+    if(
+        data &&
+        data.result &&
+        data.result.transaction
+    ){
+
+        return data.result.transaction;
+
+    }
+
+
+    if(
+        data &&
+        data.data &&
+        typeof data.data === "object"
+    ){
+
+        return data.data;
+
+    }
+
+
+    if(
+        data &&
+        data.result &&
+        typeof data.result === "object"
+    ){
+
+        return data.result;
+
+    }
+
+
+    return data || {};
+
+}
+
+
+function getApiError(
+    data,
+    fallback
+){
+
+    return (
+        data?.message ||
+        data?.error ||
+        data?.detail ||
+        data?.data?.message ||
+        fallback
+    );
+
+}
+
+
+function isPaymentSuccess(
+    status
+){
+
+    return [
+        "paid",
+        "success",
+        "successful",
+        "completed",
+        "complete",
+        "settlement",
+        "settled"
+    ].includes(
+        String(status)
+            .toLowerCase()
+    );
+
+}
+
+
+function isPaymentFailed(
+    status
+){
+
+    return [
+        "failed",
+        "failure",
+        "cancelled",
+        "canceled",
+        "expired",
+        "expire",
+        "denied"
+    ].includes(
+        String(status)
+            .toLowerCase()
+    );
+
+}
+
+
+function setPaymentStatus(
+    message,
+    type
+){
+
+    const element =
+        document.getElementById(
+            "paymentStatus"
+        );
+
+
+    element.className =
+        "payment-status";
+
+
+    if(type === "success"){
+
+        element.classList.add(
+            "success"
+        );
+
+    }
+
+
+    if(type === "error"){
+
+        element.classList.add(
+            "error"
+        );
+
+    }
+
+
+    element.textContent =
+        message;
+
+}
+
+
+/* =========================================
+   TOAST
+========================================= */
+
+let toastTimer = null;
+
+
+function showToast(
+    message
+){
+
+    const toast =
+        document.getElementById(
+            "momentraToast"
+        );
+
+
+    toast.textContent =
+        message;
+
+
+    toast.classList.add(
+        "show"
+    );
+
+
+    clearTimeout(
+        toastTimer
+    );
+
+
+    toastTimer =
+        setTimeout(
+            () => {
+
+                toast.classList.remove(
+                    "show"
+                );
+
+            },
+            2800
+        );
+
+}
+
+
+/* =========================================
+   FILE HELPERS
+========================================= */
+
+function getFileExtension(
+    contentType,
+    title
+){
+
+    const type =
+        String(
+            contentType || ""
+        )
+        .toLowerCase();
+
+
+    if(
+        type.includes(
+            "png"
+        )
+    ){
+
+        return ".png";
+
+    }
+
+
+    if(
+        type.includes(
+            "webp"
+        )
+    ){
+
+        return ".webp";
+
+    }
+
+
+    if(
+        type.includes(
+            "gif"
+        )
+    ){
+
+        return ".gif";
+
+    }
+
+
+    if(
+        type.includes(
+            "jpeg"
+        ) ||
+        type.includes(
+            "jpg"
+        )
+    ){
+
+        return ".jpg";
+
+    }
+
+
+    const match =
+        String(
+            title || ""
+        )
+        .match(
+            /\.(jpg|jpeg|png|webp|gif)$/i
+        );
+
+
+    if(match){
+
+        return `.${match[1].toLowerCase()}`;
+
+    }
+
+
+    return ".jpg";
+
+}
+
+
+function sanitizeFileName(
+    name
+){
+
+    return String(
+        name || "momentra-photo"
+    )
+    .replace(
+        /[<>:"/\\|?*\x00-\x1F]/g,
+        ""
+    )
+    .replace(
+        /\s+/g,
+        "-"
+    )
+    .replace(
+        /-+/g,
+        "-"
+    )
+    .slice(
+        0,
+        100
+    ) ||
+    "momentra-photo";
+
+}
+
+
+/* =========================================
+   ESCAPE HTML
+========================================= */
+
+function escapeHTML(
+    value
+){
+
+    return String(
+        value ?? ""
+    )
+    .replace(
+        /&/g,
+        "&amp;"
+    )
+    .replace(
+        /</g,
+        "&lt;"
+    )
+    .replace(
+        />/g,
+        "&gt;"
+    )
+    .replace(
+        /"/g,
+        "&quot;"
+    )
+    .replace(
+        /'/g,
+        "&#039;"
+    );
+
+}
+
+
+function escapeAttribute(
+    value
+){
+
+    return escapeHTML(
+        value
+    )
+    .replace(
+        /`/g,
+        "&#096;"
+    );
 
 }
 
@@ -2738,41 +5041,6 @@ function formatDate(
             month:"long",
             year:"numeric"
         }
-    );
-
-}
-
-
-/* =========================================
-   ESCAPE HTML
-========================================= */
-
-function escapeHTML(
-    value
-){
-
-    return String(
-        value ?? ""
-    )
-    .replace(
-        /&/g,
-        "&amp;"
-    )
-    .replace(
-        /</g,
-        "&lt;"
-    )
-    .replace(
-        />/g,
-        "&gt;"
-    )
-    .replace(
-        /"/g,
-        "&quot;"
-    )
-    .replace(
-        /'/g,
-        "&#039;"
     );
 
 }

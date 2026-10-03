@@ -614,6 +614,7 @@
               name="email"
               placeholder="nama@email.com"
               autocomplete="email"
+              maxlength="160"
               required
             >
 
@@ -753,6 +754,9 @@
     const togglePassword =
       document.getElementById("togglePassword");
 
+    const rememberInput =
+      document.getElementById("remember");
+
 
     /* ==========================================
        PASSWORD TOGGLE
@@ -764,13 +768,15 @@
 
         passwordInput.type = "text";
 
-        togglePassword.textContent = "Sembunyikan";
+        togglePassword.textContent =
+          "Sembunyikan";
 
       } else {
 
         passwordInput.type = "password";
 
-        togglePassword.textContent = "Lihat";
+        togglePassword.textContent =
+          "Lihat";
 
       }
 
@@ -802,206 +808,358 @@
 
 
     /* ==========================================
+       NORMALIZE USER
+    ========================================== */
+
+    function normalizeUser(user) {
+
+      if (!user || typeof user !== "object") {
+        return null;
+      }
+
+      return {
+        id: user.id || "",
+        name: user.name || "",
+        email: user.email || "",
+        role: user.role || "user"
+      };
+
+    }
+
+
+    /* ==========================================
        LOGIN
     ========================================== */
 
-    loginForm.addEventListener("submit", async (event) => {
+    loginForm.addEventListener(
+      "submit",
+      async (event) => {
 
-      event.preventDefault();
+        event.preventDefault();
 
-      clearMessage();
-
-
-      const email =
-        document.getElementById("email")
-        .value
-        .trim();
-
-      const password =
-        passwordInput.value;
+        clearMessage();
 
 
-      if (!email || !password) {
+        const email =
+          document.getElementById("email")
+            .value
+            .trim()
+            .toLowerCase();
 
-        showMessage(
-          "Email dan password wajib diisi.",
-          "error"
-        );
-
-        return;
-
-      }
+        const password =
+          passwordInput.value;
 
 
-      /* Loading */
+        if (!email || !password) {
 
-      loginButton.disabled = true;
-
-      loginButton.classList.add("loading");
-
-      buttonText.textContent =
-        "Memproses...";
-
-
-      try {
-
-        const response = await fetch(
-          `${API_BASE}/api/auth/login`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-              email: email,
-              password: password
-            })
-          }
-        );
-
-
-        const data = await response.json()
-          .catch(() => ({}));
-
-
-        if (!response.ok) {
-
-          throw new Error(
-            data.message ||
-            data.error ||
-            "Email atau password salah."
+          showMessage(
+            "Email dan password wajib diisi.",
+            "error"
           );
+
+          return;
 
         }
 
 
-        /*
-          Backend diharapkan mengembalikan:
+        /* ======================================
+           LOADING
+        ====================================== */
 
-          {
-            token: "...",
-            user: {
-              id: "...",
-              name: "...",
-              email: "...",
-              role: "user"
+        loginButton.disabled = true;
+
+        loginButton.classList.add("loading");
+
+        buttonText.textContent =
+          "Memproses...";
+
+
+        try {
+
+          /* ====================================
+             LOGIN REQUEST
+          ==================================== */
+
+          const response =
+            await fetch(
+              `${API_BASE}/api/auth/login`,
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json",
+
+                  "Accept":
+                    "application/json"
+                },
+
+                body: JSON.stringify({
+                  email: email,
+                  password: password
+                })
+              }
+            );
+
+
+          /* ====================================
+             READ RESPONSE
+          ==================================== */
+
+          const data =
+            await response.json()
+              .catch(() => ({}));
+
+
+          console.log(
+            "Momentra login response:",
+            data
+          );
+
+
+          /* ====================================
+             ERROR RESPONSE
+          ==================================== */
+
+          if (!response.ok) {
+
+            throw new Error(
+              data.message ||
+              data.error ||
+              "Email atau password salah."
+            );
+
+          }
+
+
+          /* ====================================
+             TOKEN
+          ==================================== */
+
+          const token =
+            data.token ||
+            data.access_token ||
+            data.accessToken ||
+            data.session_token;
+
+
+          /* ====================================
+             USER
+          ==================================== */
+
+          let user =
+            data.user ||
+            null;
+
+
+          /*
+            Mendukung response seperti:
+
+            {
+              token: "...",
+              user: {...}
             }
+
+            dan:
+
+            {
+              data: {
+                token: "...",
+                user: {...}
+              }
+            }
+          */
+
+          if (
+            !user &&
+            data.data &&
+            typeof data.data === "object"
+          ) {
+
+            user =
+              data.data.user ||
+              null;
+
           }
-        */
-
-        const token =
-          data.token ||
-          data.access_token ||
-          data.accessToken;
-
-        const user =
-          data.user ||
-          data.data;
 
 
-        if (!token) {
+          /* ====================================
+             TOKEN CHECK
+          ==================================== */
 
-          throw new Error(
-            "Login berhasil tetapi token tidak ditemukan dari server."
+          if (!token) {
+
+            throw new Error(
+              "Login berhasil tetapi token tidak ditemukan dari server."
+            );
+
+          }
+
+
+          /* ====================================
+             USER CHECK
+          ==================================== */
+
+          user =
+            normalizeUser(user);
+
+
+          if (!user) {
+
+            throw new Error(
+              "Login berhasil tetapi data user tidak ditemukan dari server."
+            );
+
+          }
+
+
+          if (!user.id) {
+
+            throw new Error(
+              "ID user tidak ditemukan dari server."
+            );
+
+          }
+
+
+          /* ====================================
+             CLEAR SESSION LAMA
+          ==================================== */
+
+          localStorage.removeItem(
+            "momentra_token"
           );
 
-        }
+          localStorage.removeItem(
+            "momentra_user"
+          );
+
+          localStorage.removeItem(
+            "momentra_logged_in"
+          );
 
 
-        /* Simpan session */
+          /* ====================================
+             SIMPAN SESSION BARU
+          ==================================== */
 
-        localStorage.setItem(
-          "momentra_token",
-          token
-        );
+          localStorage.setItem(
+            "momentra_token",
+            token
+          );
 
-
-        if (user) {
 
           localStorage.setItem(
             "momentra_user",
             JSON.stringify(user)
           );
 
+
+          localStorage.setItem(
+            "momentra_logged_in",
+            "true"
+          );
+
+
+          /* ====================================
+             REMEMBER ME
+          ==================================== */
+
+          localStorage.setItem(
+            "momentra_remember",
+            rememberInput.checked
+              ? "true"
+              : "false"
+          );
+
+
+          /* ====================================
+             VERIFIKASI DATA USER
+          ==================================== */
+
+          const savedUser =
+            JSON.parse(
+              localStorage.getItem(
+                "momentra_user"
+              ) || "null"
+            );
+
+
+          console.log(
+            "Momentra user tersimpan:",
+            savedUser
+          );
+
+
+          /* ====================================
+             SUCCESS
+          ==================================== */
+
+          showMessage(
+            `Selamat datang, ${
+              user.name || user.email
+            }. Mengalihkan...`,
+            "success"
+          );
+
+
+          /* ====================================
+             REDIRECT
+          ==================================== */
+
+          setTimeout(() => {
+
+            const role =
+              String(user.role || "user")
+                .toLowerCase()
+                .trim();
+
+
+            if (role === "admin") {
+
+              window.location.href =
+                "admin.html";
+
+            } else {
+
+              window.location.href =
+                "user.html";
+
+            }
+
+          }, 900);
+
+
+        } catch (error) {
+
+          console.error(
+            "Momentra login error:",
+            error
+          );
+
+
+          showMessage(
+            error.message ||
+            "Terjadi kesalahan saat login.",
+            "error"
+          );
+
+
+        } finally {
+
+          loginButton.disabled = false;
+
+          loginButton.classList.remove(
+            "loading"
+          );
+
+          buttonText.textContent =
+            "Masuk";
+
         }
 
-
-        localStorage.setItem(
-          "momentra_logged_in",
-          "true"
-        );
-
-
-        /* Remember me */
-
-        const remember =
-          document.getElementById("remember").checked;
-
-        localStorage.setItem(
-          "momentra_remember",
-          remember ? "true" : "false"
-        );
-
-
-        showMessage(
-          "Login berhasil. Mengalihkan...",
-          "success"
-        );
-
-
-        /*
-          Redirect berdasarkan role.
-        */
-
-        setTimeout(() => {
-
-          if (
-            user &&
-            user.role === "admin"
-          ) {
-
-            window.location.href =
-              "admin.html";
-
-          } else {
-
-            window.location.href =
-              "user.html";
-
-          }
-
-        }, 900);
-
-
-      } catch (error) {
-
-        console.error(
-          "Login error:",
-          error
-        );
-
-        showMessage(
-          error.message ||
-          "Terjadi kesalahan saat login.",
-          "error"
-        );
-
-      } finally {
-
-        loginButton.disabled = false;
-
-        loginButton.classList.remove(
-          "loading"
-        );
-
-        buttonText.textContent =
-          "Masuk";
-
       }
-
-    });
+    );
 
 
     /* ==========================================
@@ -1010,16 +1168,19 @@
 
     document
       .getElementById("forgotPassword")
-      .addEventListener("click", (event) => {
+      .addEventListener(
+        "click",
+        (event) => {
 
-        event.preventDefault();
+          event.preventDefault();
 
-        showMessage(
-          "Fitur lupa password belum tersedia.",
-          "error"
-        );
+          showMessage(
+            "Fitur lupa password belum tersedia.",
+            "error"
+          );
 
-      });
+        }
+      );
 
   </script>
 

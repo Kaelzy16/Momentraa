@@ -1,290 +1,198 @@
-const CORS_HEADERS = {
+/*
+  MOMENTRA API — CLOUDFLARE WORKER
+  Architecture:
+  Event → Cup → SMP vs SMP → Foto
+  Photo storage: GitHub
+  Database: Cloudflare D1
+  Payment: InstanPay
+  Storage: NO R2
+*/
+
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Api-Key",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Content-Type": "application/json; charset=utf-8"
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Key",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS"
 };
-
-const INSTANPAY_DEFAULT_BASE_URL =
-  "https://pay.instanlive.id/api/v1";
-
-const MAX_PHOTO_SIZE = 15 * 1024 * 1024;
-
-// =====================================================
-// RESPONSE
-// =====================================================
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: CORS_HEADERS
+    headers: JSON_HEADERS
   });
 }
 
-function options() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS
+function error(message, status = 400, extra = {}) {
+  return json({
+    success: false,
+    error: message,
+    ...extra
+  }, status);
+}
+
+function ok(data = {}) {
+  return json({
+    success: true,
+    ...data
   });
 }
 
-// =====================================================
-// HELPERS
-// =====================================================
-
-function cleanText(value) {
-  return String(value ?? "").trim();
+function now() {
+  return new Date().toISOString();
 }
 
-function getBearer(request) {
-  const header = request.headers.get("Authorization") || "";
-
-  if (!header.startsWith("Bearer ")) {
-    return null;
-  }
-
-  return header.slice(7).trim() || null;
-}
-
-function randomId(prefix = "") {
+function id(prefix = "") {
   return prefix + crypto.randomUUID();
 }
 
-function safeFileName(name) {
-  return String(name || "photo")
-    .replace(/[^a-zA-Z0-9._-]/g, "_")
-    .slice(0, 120);
+function bearer(request) {
+  const value = request.headers.get("Authorization") || "";
+  if (!value.startsWith("Bearer ")) return null;
+  return value.slice(7).trim();
 }
 
-function bytesToHex(buffer) {
-  return [...new Uint8Array(buffer)]
-    .map(byte => byte.toString(16).padStart(2, "0"))
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+
+  const hash = await crypto.subtle.digest(
+    "SHA-256",
+    data
+  );
+
+  return [...new Uint8Array(hash)]
+    .map(x => x.toString(16).padStart(2, "0"))
     .join("");
 }
 
-function hexToBytes(hex) {
-  const bytes = new Uint8Array(hex.length / 2);
+function base64urlEncode(bytes) {
+  let binary = "";
 
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
   }
 
-  return bytes;
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
-// =====================================================
-// PASSWORD
-// =====================================================
+function base64urlDecode(value) {
+  value = value
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
 
-function generateSalt() {
-  return bytesToHex(
-    crypto.getRandomValues(new Uint8Array(16))
+  while (value.length % 4) {
+    value += "=";
+  }
+
+  const binary = atob(value);
+
+  return Uint8Array.from(
+    binary,
+    c => c.charCodeAt(0)
   );
 }
 
-async function hashPassword(password, saltHex) {
-  const encoder = new TextEncoder();
-
+async function hmacSign(secret, message) {
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(password),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"]
-  );
-
-  const bits = await crypto.subtle.deriveBits(
+    new TextEncoder().encode(secret),
     {
-      name: "PBKDF2",
-      salt: hexToBytes(saltHex),
-      iterations: 100000,
+      name: "HMAC",
       hash: "SHA-256"
     },
-    key,
-    256
+    false,
+    ["sign"]
   );
 
-  return bytesToHex(bits);
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(message)
+  );
+
+  return base64urlEncode(
+    new Uint8Array(signature)
+  );
 }
 
-async function createPasswordHash(password) {
-  const salt = generateSalt();
-  const hash = await hashPassword(password, salt);
+async function createToken(env, user) {
+  const payload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 7
+  };
 
-  return `${salt}:${hash}`;
+  const encoded = base64urlEncode(
+    new TextEncoder().encode(
+      JSON.stringify(payload)
+    )
+  );
+
+  const signature = await hmacSign(
+    env.SESSION_SECRET || "momentra-session-secret",
+    encoded
+  );
+
+  return encoded + "." + signature;
 }
 
-async function verifyPassword(password, stored) {
-  const parts = String(stored || "").split(":");
+async function verifyToken(env, token) {
+  if (!token) return null;
 
-  if (parts.length !== 2) {
-    return false;
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+
+  const [encoded, signature] = parts;
+
+  const expected = await hmacSign(
+    env.SESSION_SECRET || "momentra-session-secret",
+    encoded
+  );
+
+  if (signature !== expected) {
+    return null;
   }
 
-  const [salt, expected] = parts;
+  try {
+    const payload = JSON.parse(
+      new TextDecoder().decode(
+        base64urlDecode(encoded)
+      )
+    );
 
-  const actual = await hashPassword(password, salt);
+    if (!payload.exp || payload.exp < Date.now()) {
+      return null;
+    }
 
-  if (actual.length !== expected.length) {
-    return false;
+    return payload;
+  } catch {
+    return null;
   }
-
-  let diff = 0;
-
-  for (let i = 0; i < actual.length; i++) {
-    diff |= actual.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-
-  return diff === 0;
 }
 
-// =====================================================
-// DATABASE INIT
-// =====================================================
-
-async function initDatabase(env) {
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'user',
-      created_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      token TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS events (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      location TEXT,
-      description TEXT,
-      created_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS cups (
-      id TEXT PRIMARY KEY,
-      event_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      created_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS matches (
-      id TEXT PRIMARY KEY,
-      cup_id TEXT NOT NULL,
-      match_name TEXT,
-      team_a TEXT NOT NULL,
-      team_b TEXT NOT NULL,
-      match_date TEXT,
-      created_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS photos (
-      id TEXT PRIMARY KEY,
-      match_id TEXT NOT NULL,
-      title TEXT,
-      photographer TEXT,
-      price INTEGER NOT NULL DEFAULT 25000,
-      r2_key TEXT NOT NULL,
-      file_name TEXT,
-      content_type TEXT,
-      file_size INTEGER,
-      created_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      ref_id TEXT UNIQUE NOT NULL,
-      instanpay_txn_id INTEGER,
-      amount INTEGER NOT NULL,
-      unique_amount INTEGER,
-      fee INTEGER DEFAULT 0,
-      net_amount INTEGER DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'pending',
-      payment_url TEXT,
-      qris_string TEXT,
-      description TEXT,
-      paid_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS transaction_items (
-      id TEXT PRIMARY KEY,
-      transaction_id TEXT NOT NULL,
-      photo_id TEXT NOT NULL,
-      price INTEGER NOT NULL,
-      created_at TEXT NOT NULL
-    )
-  `).run();
-}
-
-// =====================================================
-// AUTH
-// =====================================================
-
-async function getUserFromRequest(request, env) {
-  const token = getBearer(request);
+async function authUser(request, env) {
+  const token = bearer(request);
 
   if (!token) return null;
 
-  const row = await env.DB.prepare(`
-    SELECT
-      users.id,
-      users.name,
-      users.email,
-      users.role,
-      users.created_at
-    FROM sessions
-    JOIN users ON users.id = sessions.user_id
-    WHERE sessions.token = ?
-      AND sessions.expires_at > ?
-    LIMIT 1
-  `)
-    .bind(token, new Date().toISOString())
-    .first();
-
-  return row || null;
+  return await verifyToken(env, token);
 }
 
 async function requireAuth(request, env) {
-  const user = await getUserFromRequest(request, env);
+  const user = await authUser(request, env);
 
   if (!user) {
     return {
-      error: json(
-        {
-          success: false,
-          message: "Unauthorized."
-        },
-        401
-      )
+      error: error("Unauthorized", 401)
     };
   }
 
-  return { user };
+  return {
+    user
+  };
 }
 
 async function requireAdmin(request, env) {
@@ -296,228 +204,315 @@ async function requireAdmin(request, env) {
 
   if (auth.user.role !== "admin") {
     return {
-      error: json(
-        {
-          success: false,
-          message: "Admin access required."
-        },
-        403
-      )
+      error: error("Admin access required", 403)
     };
   }
 
   return auth;
 }
 
-// =====================================================
-// REGISTER
-// =====================================================
+/* =========================================================
+   DATABASE
+========================================================= */
 
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+async function ensureSchema(env) {
+  const db = env.DB;
+
+  await db.batch([
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS events (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        location TEXT,
+        description TEXT,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS cups (
+        id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS matches (
+        id TEXT PRIMARY KEY,
+        cup_id TEXT NOT NULL,
+        match_name TEXT,
+        team_a TEXT,
+        team_b TEXT,
+        match_date TEXT,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS photos (
+        id TEXT PRIMARY KEY,
+        match_id TEXT NOT NULL,
+        title TEXT,
+        photographer TEXT,
+        price INTEGER NOT NULL DEFAULT 25000,
+        r2_key TEXT,
+        file_name TEXT,
+        content_type TEXT,
+        file_size INTEGER,
+        image_url TEXT,
+        original_path TEXT,
+        preview_path TEXT,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        token TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        ref_id TEXT,
+        txn_id TEXT,
+        amount INTEGER NOT NULL DEFAULT 0,
+        unique_amount INTEGER,
+        fee INTEGER DEFAULT 0,
+        net_amount INTEGER DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        payment_url TEXT,
+        qris_string TEXT,
+        expired_at TEXT,
+        paid_at TEXT,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS transaction_items (
+        id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL,
+        photo_id TEXT NOT NULL,
+        price INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    `),
+
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS payment_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        api_key TEXT,
+        base_url TEXT,
+        updated_at TEXT NOT NULL
+      )
+    `)
+  ]);
+
+  /*
+    Compatibility columns for existing installations.
+  */
+  const columns = [
+    ["photos", "image_url", "TEXT"],
+    ["photos", "original_path", "TEXT"],
+    ["photos", "preview_path", "TEXT"],
+    ["photos", "r2_key", "TEXT"],
+    ["transactions", "ref_id", "TEXT"],
+    ["transactions", "txn_id", "TEXT"],
+    ["transactions", "unique_amount", "INTEGER"],
+    ["transactions", "fee", "INTEGER DEFAULT 0"],
+    ["transactions", "net_amount", "INTEGER DEFAULT 0"],
+    ["transactions", "payment_url", "TEXT"],
+    ["transactions", "qris_string", "TEXT"],
+    ["transactions", "expired_at", "TEXT"],
+    ["transactions", "paid_at", "TEXT"]
+  ];
+
+  for (const [table, column, type] of columns) {
+    try {
+      await db.prepare(
+        `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`
+      ).run();
+    } catch {
+      // Column already exists.
+    }
+  }
 }
 
-async function registerUser(request, env) {
+/* =========================================================
+   AUTH — REGISTER
+========================================================= */
+
+async function register(request, env) {
   let body;
 
   try {
     body = await request.json();
   } catch {
-    return json(
-      {
-        success: false,
-        message: "JSON tidak valid."
-      },
-      400
-    );
+    return error("Invalid JSON");
   }
 
-  const name = cleanText(body.name);
-  const email = cleanText(body.email).toLowerCase();
+  const name = String(body.name || "").trim();
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
+
   const password = String(body.password || "");
 
   if (!name) {
-    return json(
-      {
-        success: false,
-        message: "Nama wajib diisi."
-      },
-      400
+    return error("Nama wajib diisi");
+  }
+
+  if (!email) {
+    return error("Email wajib diisi");
+  }
+
+  if (!password || password.length < 6) {
+    return error(
+      "Password minimal 6 karakter"
     );
   }
 
-  if (name.length < 2) {
-    return json(
-      {
-        success: false,
-        message: "Nama terlalu pendek."
-      },
-      400
-    );
-  }
-
-  if (!isValidEmail(email)) {
-    return json(
-      {
-        success: false,
-        message: "Format email tidak valid."
-      },
-      400
-    );
-  }
-
-  if (password.length < 8) {
-    return json(
-      {
-        success: false,
-        message: "Password minimal 8 karakter."
-      },
-      400
-    );
-  }
-
-  const existing = await env.DB.prepare(`
-    SELECT id
-    FROM users
-    WHERE email = ?
-    LIMIT 1
-  `)
+  const existing = await env.DB
+    .prepare(`
+      SELECT id
+      FROM users
+      WHERE email = ?
+      LIMIT 1
+    `)
     .bind(email)
     .first();
 
   if (existing) {
-    return json(
-      {
-        success: false,
-        message: "Email sudah terdaftar."
-      },
+    return error(
+      "Email sudah terdaftar",
       409
     );
   }
 
-  const id = randomId("user_");
-  const createdAt = new Date().toISOString();
-  const passwordHash = await createPasswordHash(password);
+  const userId = Date.now();
+  const passwordHash = await sha256(password);
 
-  await env.DB.prepare(`
-    INSERT INTO users (
-      id,
-      name,
-      email,
-      password_hash,
-      role,
-      created_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-  `)
+  await env.DB
+    .prepare(`
+      INSERT INTO users
+      (
+        id,
+        name,
+        email,
+        password_hash,
+        role,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
     .bind(
-      id,
+      userId,
       name,
       email,
       passwordHash,
       "user",
-      createdAt
-    )
-    .run();
-
-  return json(
-    {
-      success: true,
-      message: "Akun berhasil dibuat.",
-      user: {
-        id,
-        name,
-        email,
-        role: "user",
-        created_at: createdAt
-      }
-    },
-    201
-  );
-}
-
-// =====================================================
-// LOGIN
-// =====================================================
-
-async function loginUser(request, env) {
-  let body;
-
-  try {
-    body = await request.json();
-  } catch {
-    return json(
-      {
-        success: false,
-        message: "JSON tidak valid."
-      },
-      400
-    );
-  }
-
-  const email = cleanText(body.email).toLowerCase();
-  const password = String(body.password || "");
-
-  const user = await env.DB.prepare(`
-    SELECT *
-    FROM users
-    WHERE email = ?
-    LIMIT 1
-  `)
-    .bind(email)
-    .first();
-
-  if (!user) {
-    return json(
-      {
-        success: false,
-        message: "Email atau password salah."
-      },
-      401
-    );
-  }
-
-  const valid = await verifyPassword(
-    password,
-    user.password_hash
-  );
-
-  if (!valid) {
-    return json(
-      {
-        success: false,
-        message: "Email atau password salah."
-      },
-      401
-    );
-  }
-
-  const token = crypto.randomUUID();
-  const createdAt = new Date();
-  const expiresAt = new Date(
-    createdAt.getTime() + 7 * 24 * 60 * 60 * 1000
-  );
-
-  await env.DB.prepare(`
-    INSERT INTO sessions (
-      token,
-      user_id,
-      created_at,
-      expires_at
-    )
-    VALUES (?, ?, ?, ?)
-  `)
-    .bind(
-      token,
-      user.id,
-      createdAt.toISOString(),
-      expiresAt.toISOString()
+      now()
     )
     .run();
 
   return json({
     success: true,
+    message: "Registrasi berhasil",
+    user: {
+      id: userId,
+      name,
+      email,
+      role: "user"
+    }
+  }, 201);
+}
+
+/* =========================================================
+   AUTH — LOGIN
+========================================================= */
+
+async function login(request, env) {
+  let body;
+
+  try {
+    body = await request.json();
+  } catch {
+    return error("Invalid JSON");
+  }
+
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
+
+  const password = String(body.password || "");
+
+  if (!email || !password) {
+    return error(
+      "Email dan password wajib diisi"
+    );
+  }
+
+  const user = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        name,
+        email,
+        password_hash,
+        role,
+        created_at
+      FROM users
+      WHERE email = ?
+      LIMIT 1
+    `)
+    .bind(email)
+    .first();
+
+  if (!user) {
+    return error(
+      "Email atau password salah",
+      401
+    );
+  }
+
+  const passwordHash =
+    await sha256(password);
+
+  if (passwordHash !== user.password_hash) {
+    return error(
+      "Email atau password salah",
+      401
+    );
+  }
+
+  const token =
+    await createToken(env, user);
+
+  return json({
+    success: true,
     token,
+    access_token: token,
     user: {
       id: user.id,
       name: user.name,
@@ -528,914 +523,2095 @@ async function loginUser(request, env) {
   });
 }
 
-// =====================================================
-// LOGOUT
-// =====================================================
+/* =========================================================
+   AUTH — ME
+========================================================= */
 
-async function logoutUser(request, env) {
-  const token = getBearer(request);
+async function me(request, env) {
+  const auth = await requireAuth(
+    request,
+    env
+  );
 
-  if (token) {
-    await env.DB.prepare(`
-      DELETE FROM sessions
-      WHERE token = ?
-    `)
-      .bind(token)
-      .run();
+  if (auth.error) {
+    return auth.error;
   }
 
-  return json({
-    success: true,
-    message: "Logout berhasil."
+  const user = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        name,
+        email,
+        role,
+        created_at
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(auth.user.id)
+    .first();
+
+  if (!user) {
+    return error(
+      "User tidak ditemukan",
+      404
+    );
+  }
+
+  return ok({
+    user
   });
 }
 
-// =====================================================
-// ADMIN USERS
-// =====================================================
+/* =========================================================
+   LOGOUT
+========================================================= */
 
-async function getAdminUsers(env) {
-  const result = await env.DB.prepare(`
-    SELECT
-      id,
-      name,
-      email,
-      role,
-      created_at
-    FROM users
-    ORDER BY created_at DESC
-  `).all();
+async function logout() {
+  return ok({
+    message: "Logout berhasil"
+  });
+}
 
-  return json({
-    success: true,
+/* =========================================================
+   ADMIN — USERS
+========================================================= */
+
+async function adminUsers(request, env) {
+  const auth = await requireAdmin(request, env);
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        name,
+        email,
+        role,
+        created_at
+      FROM users
+      ORDER BY created_at DESC
+    `)
+    .all();
+
+  return ok({
     users: result.results || []
   });
 }
 
-// =====================================================
-// EVENTS
-// =====================================================
+/* =========================================================
+   ADMIN — DASHBOARD
+========================================================= */
 
-async function createEvent(request, env) {
-  let body;
+async function adminDashboard(request, env) {
+  const auth = await requireAdmin(request, env);
 
-  try {
-    body = await request.json();
-  } catch {
-    return json(
-      {
-        success: false,
-        message: "JSON tidak valid."
-      },
-      400
-    );
+  if (auth.error) {
+    return auth.error;
   }
 
-  const name = cleanText(body.name);
+  const [
+    users,
+    events,
+    cups,
+    matches,
+    photos,
+    transactions
+  ] = await Promise.all([
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM users`
+    ).first(),
 
-  if (!name) {
-    return json(
-      {
-        success: false,
-        message: "Nama olahraga/event wajib diisi."
-      },
-      422
-    );
-  }
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM events`
+    ).first(),
 
-  const id = randomId("event_");
-  const createdAt = new Date().toISOString();
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM cups`
+    ).first(),
 
-  await env.DB.prepare(`
-    INSERT INTO events (
-      id,
-      name,
-      location,
-      description,
-      created_at
-    )
-    VALUES (?, ?, ?, ?, ?)
-  `)
-    .bind(
-      id,
-      name,
-      cleanText(body.location),
-      cleanText(body.description),
-      createdAt
-    )
-    .run();
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM matches`
+    ).first(),
 
-  return json({
-    success: true,
-    event: {
-      id,
-      name,
-      location: cleanText(body.location),
-      description: cleanText(body.description),
-      created_at: createdAt
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM photos`
+    ).first(),
+
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM transactions`
+    ).first()
+  ]);
+
+  return ok({
+    stats: {
+      users: Number(users?.total || 0),
+      events: Number(events?.total || 0),
+      cups: Number(cups?.total || 0),
+      matches: Number(matches?.total || 0),
+      photos: Number(photos?.total || 0),
+      transactions: Number(
+        transactions?.total || 0
+      )
     }
-  }, 201);
+  });
 }
 
-async function getEvents(env) {
-  const result = await env.DB.prepare(`
-    SELECT *
-    FROM events
-    ORDER BY created_at DESC
-  `).all();
+/* =========================================================
+   EVENTS
+========================================================= */
 
-  return json({
-    success: true,
+async function adminEvents(request, env) {
+  const auth = await requireAdmin(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  if (request.method === "GET") {
+    const result = await env.DB
+      .prepare(`
+        SELECT
+          id,
+          name,
+          location,
+          description,
+          created_at
+        FROM events
+        ORDER BY created_at DESC
+      `)
+      .all();
+
+    return ok({
+      events: result.results || []
+    });
+  }
+
+  if (request.method === "POST") {
+    let body;
+
+    try {
+      body = await request.json();
+    } catch {
+      return error("Invalid JSON");
+    }
+
+    const name = String(
+      body.name || ""
+    ).trim();
+
+    const location = String(
+      body.location || ""
+    ).trim();
+
+    const description = String(
+      body.description || ""
+    ).trim();
+
+    if (!name) {
+      return error(
+        "Nama event wajib diisi"
+      );
+    }
+
+    const eventId = id("evt_");
+
+    await env.DB
+      .prepare(`
+        INSERT INTO events
+        (
+          id,
+          name,
+          location,
+          description,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+      `)
+      .bind(
+        eventId,
+        name,
+        location,
+        description,
+        now()
+      )
+      .run();
+
+    return json({
+      success: true,
+      message: "Event berhasil dibuat",
+      event: {
+        id: eventId,
+        name,
+        location,
+        description
+      }
+    }, 201);
+  }
+
+  if (request.method === "DELETE") {
+    const url = new URL(request.url);
+    const eventId =
+      url.searchParams.get("id");
+
+    if (!eventId) {
+      return error(
+        "Event ID wajib diisi"
+      );
+    }
+
+    await env.DB
+      .prepare(`
+        DELETE FROM events
+        WHERE id = ?
+      `)
+      .bind(eventId)
+      .run();
+
+    return ok({
+      message: "Event berhasil dihapus"
+    });
+  }
+
+  return error(
+    "Method not allowed",
+    405
+  );
+}
+
+/* =========================================================
+   CUPS
+========================================================= */
+
+async function adminCups(request, env) {
+  const auth = await requireAdmin(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  if (request.method === "GET") {
+    const result = await env.DB
+      .prepare(`
+        SELECT
+          c.id,
+          c.event_id,
+          c.name,
+          c.description,
+          c.created_at,
+          e.name AS event_name
+        FROM cups c
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        ORDER BY c.created_at DESC
+      `)
+      .all();
+
+    return ok({
+      cups: result.results || []
+    });
+  }
+
+  if (request.method === "POST") {
+    let body;
+
+    try {
+      body = await request.json();
+    } catch {
+      return error("Invalid JSON");
+    }
+
+    const eventId = String(
+      body.event_id ||
+      body.eventId ||
+      ""
+    ).trim();
+
+    const name = String(
+      body.name || ""
+    ).trim();
+
+    const description = String(
+      body.description || ""
+    ).trim();
+
+    if (!eventId) {
+      return error(
+        "Event wajib dipilih"
+      );
+    }
+
+    if (!name) {
+      return error(
+        "Nama cup wajib diisi"
+      );
+    }
+
+    const event = await env.DB
+      .prepare(`
+        SELECT id
+        FROM events
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(eventId)
+      .first();
+
+    if (!event) {
+      return error(
+        "Event tidak ditemukan",
+        404
+      );
+    }
+
+    const cupId = id("cup_");
+
+    await env.DB
+      .prepare(`
+        INSERT INTO cups
+        (
+          id,
+          event_id,
+          name,
+          description,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+      `)
+      .bind(
+        cupId,
+        eventId,
+        name,
+        description,
+        now()
+      )
+      .run();
+
+    return json({
+      success: true,
+      message: "Cup berhasil dibuat",
+      cup: {
+        id: cupId,
+        event_id: eventId,
+        name,
+        description
+      }
+    }, 201);
+  }
+
+  if (request.method === "DELETE") {
+    const url = new URL(request.url);
+    const cupId =
+      url.searchParams.get("id");
+
+    if (!cupId) {
+      return error(
+        "Cup ID wajib diisi"
+      );
+    }
+
+    await env.DB
+      .prepare(`
+        DELETE FROM cups
+        WHERE id = ?
+      `)
+      .bind(cupId)
+      .run();
+
+    return ok({
+      message: "Cup berhasil dihapus"
+    });
+  }
+
+  return error(
+    "Method not allowed",
+    405
+  );
+}
+
+/* =========================================================
+   MATCH / SMP VS SMP
+========================================================= */
+
+async function adminMatches(request, env) {
+  const auth = await requireAdmin(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  if (request.method === "GET") {
+    const result = await env.DB
+      .prepare(`
+        SELECT
+          m.id,
+          m.cup_id,
+          m.match_name,
+          m.team_a,
+          m.team_b,
+          m.match_date,
+          m.created_at,
+          c.name AS cup_name,
+          e.name AS event_name
+        FROM matches m
+        LEFT JOIN cups c
+          ON c.id = m.cup_id
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        ORDER BY m.match_date DESC,
+                 m.created_at DESC
+      `)
+      .all();
+
+    return ok({
+      matches: result.results || []
+    });
+  }
+
+  if (request.method === "POST") {
+    let body;
+
+    try {
+      body = await request.json();
+    } catch {
+      return error("Invalid JSON");
+    }
+
+    const cupId = String(
+      body.cup_id ||
+      body.cupId ||
+      ""
+    ).trim();
+
+    const matchName = String(
+      body.matchName ||
+      body.match_name ||
+      body.name ||
+      ""
+    ).trim();
+
+    const teamA = String(
+      body.teamA ||
+      body.team_a ||
+      ""
+    ).trim();
+
+    const teamB = String(
+      body.teamB ||
+      body.team_b ||
+      ""
+    ).trim();
+
+    const matchDate = String(
+      body.matchDate ||
+      body.match_date ||
+      ""
+    ).trim();
+
+    if (!cupId) {
+      return error(
+        "Cup wajib dipilih"
+      );
+    }
+
+    if (!teamA) {
+      return error(
+        "SMP A wajib diisi"
+      );
+    }
+
+    if (!teamB) {
+      return error(
+        "SMP B wajib diisi"
+      );
+    }
+
+    const cup = await env.DB
+      .prepare(`
+        SELECT id
+        FROM cups
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(cupId)
+      .first();
+
+    if (!cup) {
+      return error(
+        "Cup tidak ditemukan",
+        404
+      );
+    }
+
+    const matchId = id("match_");
+
+    await env.DB
+      .prepare(`
+        INSERT INTO matches
+        (
+          id,
+          cup_id,
+          match_name,
+          team_a,
+          team_b,
+          match_date,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        matchId,
+        cupId,
+        matchName ||
+          `${teamA} vs ${teamB}`,
+        teamA,
+        teamB,
+        matchDate || null,
+        now()
+      )
+      .run();
+
+    return json({
+      success: true,
+      message:
+        "SMP vs SMP berhasil dibuat",
+      match: {
+        id: matchId,
+        cup_id: cupId,
+        match_name:
+          matchName ||
+          `${teamA} vs ${teamB}`,
+        team_a: teamA,
+        team_b: teamB,
+        match_date: matchDate || null
+      }
+    }, 201);
+  }
+
+  if (request.method === "DELETE") {
+    const url = new URL(request.url);
+
+    const matchId =
+      url.searchParams.get("id");
+
+    if (!matchId) {
+      return error(
+        "Match ID wajib diisi"
+      );
+    }
+
+    await env.DB
+      .prepare(`
+        DELETE FROM matches
+        WHERE id = ?
+      `)
+      .bind(matchId)
+      .run();
+
+    return ok({
+      message:
+        "SMP vs SMP berhasil dihapus"
+    });
+  }
+
+  return error(
+    "Method not allowed",
+    405
+  );
+}
+
+/* =========================================================
+   ADMIN — PHOTOS METADATA
+   File sudah diupload ke GitHub oleh admin.html.
+========================================================= */
+
+async function adminPhotos(request, env) {
+  const auth = await requireAdmin(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  if (request.method === "GET") {
+    const result = await env.DB
+      .prepare(`
+        SELECT
+          p.*,
+          m.match_name,
+          m.team_a,
+          m.team_b,
+          c.name AS cup_name,
+          e.name AS event_name
+        FROM photos p
+        LEFT JOIN matches m
+          ON m.id = p.match_id
+        LEFT JOIN cups c
+          ON c.id = m.cup_id
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        ORDER BY p.created_at DESC
+      `)
+      .all();
+
+    return ok({
+      photos: result.results || []
+    });
+  }
+
+  if (request.method === "POST") {
+    let body;
+
+    try {
+      body = await request.json();
+    } catch {
+      return error("Invalid JSON");
+    }
+
+    const matchId = String(
+      body.match_id ||
+      body.matchId ||
+      ""
+    ).trim();
+
+    const title = String(
+      body.title || ""
+    ).trim();
+
+    const photographer = String(
+      body.photographer || ""
+    ).trim();
+
+    const price = Number(
+      body.price || 25000
+    );
+
+    const imageUrl = String(
+      body.image_url ||
+      body.imageUrl ||
+      ""
+    ).trim();
+
+    const originalPath = String(
+      body.original_path ||
+      body.originalPath ||
+      ""
+    ).trim();
+
+    const previewPath = String(
+      body.preview_path ||
+      body.previewPath ||
+      ""
+    ).trim();
+
+    const fileName = String(
+      body.file_name ||
+      body.fileName ||
+      ""
+    ).trim();
+
+    const contentType = String(
+      body.content_type ||
+      body.contentType ||
+      "image/jpeg"
+    ).trim();
+
+    const fileSize = Number(
+      body.file_size ||
+      body.fileSize ||
+      0
+    );
+
+    if (!matchId) {
+      return error(
+        "Match wajib dipilih"
+      );
+    }
+
+    if (!originalPath) {
+      return error(
+        "Original path wajib diisi"
+      );
+    }
+
+    if (!previewPath) {
+      return error(
+        "Preview path wajib diisi"
+      );
+    }
+
+    if (!Number.isFinite(price) ||
+        price < 0) {
+      return error(
+        "Harga tidak valid"
+      );
+    }
+
+    const match = await env.DB
+      .prepare(`
+        SELECT id
+        FROM matches
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(matchId)
+      .first();
+
+    if (!match) {
+      return error(
+        "Match tidak ditemukan",
+        404
+      );
+    }
+
+    const photoId = id("photo_");
+
+    await env.DB
+      .prepare(`
+        INSERT INTO photos
+        (
+          id,
+          match_id,
+          title,
+          photographer,
+          price,
+          r2_key,
+          file_name,
+          content_type,
+          file_size,
+          image_url,
+          original_path,
+          preview_path,
+          created_at
+        )
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        photoId,
+        matchId,
+        title,
+        photographer,
+        Math.round(price),
+        originalPath,
+        fileName,
+        contentType,
+        fileSize,
+        imageUrl,
+        originalPath,
+        previewPath,
+        now()
+      )
+      .run();
+
+    return json({
+      success: true,
+      message:
+        "Foto berhasil ditambahkan",
+      photo: {
+        id: photoId,
+        match_id: matchId,
+        title,
+        photographer,
+        price: Math.round(price),
+        image_url: imageUrl,
+        original_path: originalPath,
+        preview_path: previewPath
+      }
+    }, 201);
+  }
+
+  if (request.method === "DELETE") {
+    const url = new URL(request.url);
+
+    const photoId =
+      url.searchParams.get("id");
+
+    if (!photoId) {
+      return error(
+        "Photo ID wajib diisi"
+      );
+    }
+
+    await env.DB
+      .prepare(`
+        DELETE FROM photos
+        WHERE id = ?
+      `)
+      .bind(photoId)
+      .run();
+
+    await env.DB
+      .prepare(`
+        DELETE FROM transaction_items
+        WHERE photo_id = ?
+      `)
+      .bind(photoId)
+      .run();
+
+    return ok({
+      message:
+        "Foto berhasil dihapus"
+    });
+  }
+
+  return error(
+    "Method not allowed",
+    405
+  );
+}
+
+/* =========================================================
+   PUBLIC CATALOG — EVENTS
+========================================================= */
+
+async function publicEvents(env) {
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        e.id,
+        e.name,
+        e.location,
+        e.description,
+        e.created_at,
+        COUNT(DISTINCT c.id) AS cup_count
+      FROM events e
+      LEFT JOIN cups c
+        ON c.event_id = e.id
+      GROUP BY
+        e.id,
+        e.name,
+        e.location,
+        e.description,
+        e.created_at
+      ORDER BY e.created_at DESC
+    `)
+    .all();
+
+  return ok({
     events: result.results || []
   });
 }
 
-// =====================================================
-// CUPS
-// =====================================================
+/* =========================================================
+   PUBLIC CATALOG — CUPS
+========================================================= */
 
-async function createCup(request, env) {
-  let body;
+async function publicCups(env, request) {
+  const url = new URL(request.url);
 
-  try {
-    body = await request.json();
-  } catch {
-    return json(
-      {
-        success: false,
-        message: "JSON tidak valid."
-      },
-      400
-    );
-  }
-
-  const eventId = cleanText(body.event_id);
-  const name = cleanText(body.name);
-
-  if (!eventId || !name) {
-    return json(
-      {
-        success: false,
-        message: "event_id dan nama cup wajib diisi."
-      },
-      422
-    );
-  }
-
-  const event = await env.DB.prepare(`
-    SELECT id
-    FROM events
-    WHERE id = ?
-    LIMIT 1
-  `)
-    .bind(eventId)
-    .first();
-
-  if (!event) {
-    return json(
-      {
-        success: false,
-        message: "Event tidak ditemukan."
-      },
-      404
-    );
-  }
-
-  const id = randomId("cup_");
-  const createdAt = new Date().toISOString();
-
-  await env.DB.prepare(`
-    INSERT INTO cups (
-      id,
-      event_id,
-      name,
-      description,
-      created_at
-    )
-    VALUES (?, ?, ?, ?, ?)
-  `)
-    .bind(
-      id,
-      eventId,
-      name,
-      cleanText(body.description),
-      createdAt
-    )
-    .run();
-
-  return json({
-    success: true,
-    cup: {
-      id,
-      event_id: eventId,
-      name,
-      description: cleanText(body.description),
-      created_at: createdAt
-    }
-  }, 201);
-}
-
-async function getCups(env, eventId = null) {
-  let result;
+  const eventId =
+    url.searchParams.get("event_id") ||
+    url.searchParams.get("eventId");
 
   if (eventId) {
-    result = await env.DB.prepare(`
-      SELECT
-        cups.*,
-        events.name AS event_name
-      FROM cups
-      JOIN events ON events.id = cups.event_id
-      WHERE cups.event_id = ?
-      ORDER BY cups.created_at DESC
-    `)
+    const result = await env.DB
+      .prepare(`
+        SELECT
+          c.id,
+          c.event_id,
+          c.name,
+          c.description,
+          c.created_at,
+          e.name AS event_name,
+          COUNT(DISTINCT m.id) AS match_count
+        FROM cups c
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        LEFT JOIN matches m
+          ON m.cup_id = c.id
+        WHERE c.event_id = ?
+        GROUP BY
+          c.id,
+          c.event_id,
+          c.name,
+          c.description,
+          c.created_at,
+          e.name
+        ORDER BY c.created_at DESC
+      `)
       .bind(eventId)
       .all();
-  } else {
-    result = await env.DB.prepare(`
-      SELECT
-        cups.*,
-        events.name AS event_name
-      FROM cups
-      JOIN events ON events.id = cups.event_id
-      ORDER BY cups.created_at DESC
-    `).all();
+
+    return ok({
+      cups: result.results || []
+    });
   }
 
-  return json({
-    success: true,
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        c.id,
+        c.event_id,
+        c.name,
+        c.description,
+        c.created_at,
+        e.name AS event_name,
+        COUNT(DISTINCT m.id) AS match_count
+      FROM cups c
+      LEFT JOIN events e
+        ON e.id = c.event_id
+      LEFT JOIN matches m
+        ON m.cup_id = c.id
+      GROUP BY
+        c.id,
+        c.event_id,
+        c.name,
+        c.description,
+        c.created_at,
+        e.name
+      ORDER BY c.created_at DESC
+    `)
+    .all();
+
+  return ok({
     cups: result.results || []
   });
 }
 
-// =====================================================
-// MATCH / SEKOLAH VS SEKOLAH
-// =====================================================
+/* =========================================================
+   PUBLIC CATALOG — MATCHES / SMP VS SMP
+========================================================= */
 
-async function createMatch(request, env) {
-  let body;
+async function publicMatches(env, request) {
+  const url = new URL(request.url);
 
-  try {
-    body = await request.json();
-  } catch {
-    return json(
-      {
-        success: false,
-        message: "JSON tidak valid."
-      },
-      400
-    );
-  }
-
-  const cupId = cleanText(body.cup_id);
-  const teamA = cleanText(body.teamA || body.team_a);
-  const teamB = cleanText(body.teamB || body.team_b);
-
-  if (!cupId || !teamA || !teamB) {
-    return json(
-      {
-        success: false,
-        message: "Cup, sekolah A, dan sekolah B wajib diisi."
-      },
-      422
-    );
-  }
-
-  const cup = await env.DB.prepare(`
-    SELECT id
-    FROM cups
-    WHERE id = ?
-    LIMIT 1
-  `)
-    .bind(cupId)
-    .first();
-
-  if (!cup) {
-    return json(
-      {
-        success: false,
-        message: "Cup tidak ditemukan."
-      },
-      404
-    );
-  }
-
-  const id = randomId("match_");
-  const createdAt = new Date().toISOString();
-
-  await env.DB.prepare(`
-    INSERT INTO matches (
-      id,
-      cup_id,
-      match_name,
-      team_a,
-      team_b,
-      match_date,
-      created_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
-    .bind(
-      id,
-      cupId,
-      cleanText(body.matchName || body.match_name),
-      teamA,
-      teamB,
-      cleanText(body.matchDate || body.match_date),
-      createdAt
-    )
-    .run();
-
-  return json({
-    success: true,
-    match: {
-      id,
-      cup_id: cupId,
-      match_name: cleanText(body.matchName || body.match_name),
-      team_a: teamA,
-      team_b: teamB,
-      match_date: cleanText(body.matchDate || body.match_date),
-      created_at: createdAt
-    }
-  }, 201);
-}
-
-async function getMatches(env, cupId = null) {
-  let result;
+  const cupId =
+    url.searchParams.get("cup_id") ||
+    url.searchParams.get("cupId");
 
   if (cupId) {
-    result = await env.DB.prepare(`
-      SELECT
-        matches.*,
-        cups.name AS cup_name,
-        events.name AS event_name
-      FROM matches
-      JOIN cups ON cups.id = matches.cup_id
-      JOIN events ON events.id = cups.event_id
-      WHERE matches.cup_id = ?
-      ORDER BY matches.match_date DESC, matches.created_at DESC
-    `)
+    const result = await env.DB
+      .prepare(`
+        SELECT
+          m.id,
+          m.cup_id,
+          m.match_name,
+          m.team_a,
+          m.team_b,
+          m.match_date,
+          m.created_at,
+          c.name AS cup_name,
+          e.name AS event_name,
+          COUNT(p.id) AS photo_count
+        FROM matches m
+        LEFT JOIN cups c
+          ON c.id = m.cup_id
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        LEFT JOIN photos p
+          ON p.match_id = m.id
+        WHERE m.cup_id = ?
+        GROUP BY
+          m.id,
+          m.cup_id,
+          m.match_name,
+          m.team_a,
+          m.team_b,
+          m.match_date,
+          m.created_at,
+          c.name,
+          e.name
+        ORDER BY
+          m.match_date DESC,
+          m.created_at DESC
+      `)
       .bind(cupId)
       .all();
-  } else {
-    result = await env.DB.prepare(`
-      SELECT
-        matches.*,
-        cups.name AS cup_name,
-        events.name AS event_name
-      FROM matches
-      JOIN cups ON cups.id = matches.cup_id
-      JOIN events ON events.id = cups.event_id
-      ORDER BY matches.match_date DESC, matches.created_at DESC
-    `).all();
+
+    return ok({
+      matches: result.results || []
+    });
   }
 
-  return json({
-    success: true,
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        m.id,
+        m.cup_id,
+        m.match_name,
+        m.team_a,
+        m.team_b,
+        m.match_date,
+        m.created_at,
+        c.name AS cup_name,
+        e.name AS event_name,
+        COUNT(p.id) AS photo_count
+      FROM matches m
+      LEFT JOIN cups c
+        ON c.id = m.cup_id
+      LEFT JOIN events e
+        ON e.id = c.event_id
+      LEFT JOIN photos p
+        ON p.match_id = m.id
+      GROUP BY
+        m.id,
+        m.cup_id,
+        m.match_name,
+        m.team_a,
+        m.team_b,
+        m.match_date,
+        m.created_at,
+        c.name,
+        e.name
+      ORDER BY
+        m.match_date DESC,
+        m.created_at DESC
+    `)
+    .all();
+
+  return ok({
     matches: result.results || []
   });
 }
 
-// =====================================================
-// PHOTO UPLOAD
-// =====================================================
+/* =========================================================
+   PUBLIC CATALOG — PHOTOS
+========================================================= */
 
-async function uploadPhotos(request, env) {
-  if (!env.PHOTOS) {
-    return json(
-      {
-        success: false,
-        message: "R2 binding PHOTOS belum dikonfigurasi."
-      },
-      500
+async function publicPhotos(env, request) {
+  const url = new URL(request.url);
+
+  const matchId =
+    url.searchParams.get("match_id") ||
+    url.searchParams.get("matchId");
+
+  if (matchId) {
+    const result = await env.DB
+      .prepare(`
+        SELECT
+          p.id,
+          p.match_id,
+          p.title,
+          p.photographer,
+          p.price,
+          p.file_name,
+          p.content_type,
+          p.file_size,
+          p.image_url,
+          p.preview_path,
+          p.created_at,
+          m.match_name,
+          m.team_a,
+          m.team_b,
+          c.name AS cup_name,
+          e.name AS event_name
+        FROM photos p
+        LEFT JOIN matches m
+          ON m.id = p.match_id
+        LEFT JOIN cups c
+          ON c.id = m.cup_id
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        WHERE p.match_id = ?
+        ORDER BY p.created_at DESC
+      `)
+      .bind(matchId)
+      .all();
+
+    return ok({
+      photos: result.results || []
+    });
+  }
+
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        p.id,
+        p.match_id,
+        p.title,
+        p.photographer,
+        p.price,
+        p.file_name,
+        p.content_type,
+        p.file_size,
+        p.image_url,
+        p.preview_path,
+        p.created_at,
+        m.match_name,
+        m.team_a,
+        m.team_b,
+        c.name AS cup_name,
+        e.name AS event_name
+      FROM photos p
+      LEFT JOIN matches m
+        ON m.id = p.match_id
+      LEFT JOIN cups c
+        ON c.id = m.cup_id
+      LEFT JOIN events e
+        ON e.id = c.event_id
+      ORDER BY p.created_at DESC
+    `)
+    .all();
+
+  return ok({
+    photos: result.results || []
+  });
+}
+
+/* =========================================================
+   PUBLIC — SINGLE EVENT
+========================================================= */
+
+async function publicEvent(env, request) {
+  const url = new URL(request.url);
+
+  const eventId =
+    url.searchParams.get("id");
+
+  if (!eventId) {
+    return error(
+      "Event ID wajib diisi"
     );
   }
 
-  const form = await request.formData();
+  const event = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        name,
+        location,
+        description,
+        created_at
+      FROM events
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(eventId)
+    .first();
 
-  const matchId = cleanText(form.get("match_id"));
-  const title = cleanText(form.get("title"));
-  const photographer = cleanText(form.get("photographer"));
-
-  const price = Number(form.get("price") || 25000);
-  const file = form.get("file");
-
-  if (!matchId || !file || typeof file === "string") {
-    return json(
-      {
-        success: false,
-        message: "Match dan file foto wajib diisi."
-      },
-      422
+  if (!event) {
+    return error(
+      "Event tidak ditemukan",
+      404
     );
   }
 
-  if (!file.type.startsWith("image/")) {
-    return json(
-      {
-        success: false,
-        message: "File harus berupa gambar."
-      },
-      422
+  const cups = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        event_id,
+        name,
+        description,
+        created_at
+      FROM cups
+      WHERE event_id = ?
+      ORDER BY created_at DESC
+    `)
+    .bind(eventId)
+    .all();
+
+  return ok({
+    event,
+    cups: cups.results || []
+  });
+}
+
+/* =========================================================
+   PUBLIC — SINGLE MATCH
+========================================================= */
+
+async function publicMatch(env, request) {
+  const url = new URL(request.url);
+
+  const matchId =
+    url.searchParams.get("id");
+
+  if (!matchId) {
+    return error(
+      "Match ID wajib diisi"
     );
   }
 
-  if (file.size > MAX_PHOTO_SIZE) {
-    return json(
-      {
-        success: false,
-        message: "Ukuran foto maksimal 15 MB."
-      },
-      422
-    );
-  }
-
-  const match = await env.DB.prepare(`
-    SELECT id
-    FROM matches
-    WHERE id = ?
-    LIMIT 1
-  `)
+  const match = await env.DB
+    .prepare(`
+      SELECT
+        m.id,
+        m.cup_id,
+        m.match_name,
+        m.team_a,
+        m.team_b,
+        m.match_date,
+        m.created_at,
+        c.name AS cup_name,
+        e.name AS event_name
+      FROM matches m
+      LEFT JOIN cups c
+        ON c.id = m.cup_id
+      LEFT JOIN events e
+        ON e.id = c.event_id
+      WHERE m.id = ?
+      LIMIT 1
+    `)
     .bind(matchId)
     .first();
 
   if (!match) {
-    return json(
-      {
-        success: false,
-        message: "Match tidak ditemukan."
-      },
+    return error(
+      "SMP vs SMP tidak ditemukan",
       404
     );
   }
 
-  const id = randomId("photo_");
-  const fileName = safeFileName(file.name);
-  const r2Key =
-    `photos/${matchId}/${id}-${fileName}`;
-
-  await env.PHOTOS.put(
-    r2Key,
-    file.stream(),
-    {
-      httpMetadata: {
-        contentType: file.type
-      }
-    }
-  );
-
-  const createdAt = new Date().toISOString();
-
-  await env.DB.prepare(`
-    INSERT INTO photos (
-      id,
-      match_id,
-      title,
-      photographer,
-      price,
-      r2_key,
-      file_name,
-      content_type,
-      file_size,
-      created_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-    .bind(
-      id,
-      matchId,
-      title,
-      photographer,
-      price,
-      r2Key,
-      fileName,
-      file.type,
-      file.size,
-      createdAt
-    )
-    .run();
-
-  return json({
-    success: true,
-    message: "Foto berhasil diupload.",
-    photo: {
-      id,
-      match_id: matchId,
-      title,
-      photographer,
-      price,
-      created_at: createdAt
-    }
-  }, 201);
-}
-
-// =====================================================
-// PHOTO FILE
-// =====================================================
-
-async function getPhotoFile(photoId, env) {
-  if (!env.PHOTOS) {
-    return new Response("R2 not configured.", {
-      status: 500
-    });
-  }
-
-  const photo = await env.DB.prepare(`
-    SELECT *
-    FROM photos
-    WHERE id = ?
-    LIMIT 1
-  `)
-    .bind(photoId)
-    .first();
-
-  if (!photo) {
-    return new Response("Photo not found.", {
-      status: 404
-    });
-  }
-
-  const object = await env.PHOTOS.get(photo.r2_key);
-
-  if (!object) {
-    return new Response("File not found.", {
-      status: 404
-    });
-  }
-
-  const headers = new Headers();
-
-  object.writeHttpMetadata(headers);
-  headers.set(
-    "Cache-Control",
-    "public, max-age=31536000"
-  );
-
-  return new Response(object.body, {
-    headers
-  });
-}
-
-// =====================================================
-// PUBLIC PHOTO LIST
-// =====================================================
-
-async function getPhotos(env, matchId = null) {
-  let result;
-
-  if (matchId) {
-    result = await env.DB.prepare(`
+  const photos = await env.DB
+    .prepare(`
       SELECT
-        photos.id,
-        photos.match_id,
-        photos.title,
-        photos.photographer,
-        photos.price,
-        photos.content_type,
-        photos.file_size,
-        photos.created_at,
-        matches.team_a,
-        matches.team_b,
-        cups.name AS cup_name,
-        events.name AS event_name
+        id,
+        match_id,
+        title,
+        photographer,
+        price,
+        file_name,
+        content_type,
+        file_size,
+        image_url,
+        preview_path,
+        created_at
       FROM photos
-      JOIN matches ON matches.id = photos.match_id
-      JOIN cups ON cups.id = matches.cup_id
-      JOIN events ON events.id = cups.event_id
-      WHERE photos.match_id = ?
-      ORDER BY photos.created_at DESC
+      WHERE match_id = ?
+      ORDER BY created_at DESC
     `)
-      .bind(matchId)
-      .all();
-  } else {
-    result = await env.DB.prepare(`
-      SELECT
-        photos.id,
-        photos.match_id,
-        photos.title,
-        photos.photographer,
-        photos.price,
-        photos.content_type,
-        photos.file_size,
-        photos.created_at,
-        matches.team_a,
-        matches.team_b,
-        cups.name AS cup_name,
-        events.name AS event_name
-      FROM photos
-      JOIN matches ON matches.id = photos.match_id
-      JOIN cups ON cups.id = matches.cup_id
-      JOIN events ON events.id = cups.event_id
-      ORDER BY photos.created_at DESC
-    `).all();
-  }
+    .bind(matchId)
+    .all();
 
-  const photos = (result.results || []).map(photo => ({
-    ...photo,
-    file_url:
-      `/api/photos/${encodeURIComponent(photo.id)}/file`
-  }));
-
-  return json({
-    success: true,
-    photos
+  return ok({
+    match,
+    photos: photos.results || []
   });
 }
 
-// =====================================================
-// DELETE PHOTO
-// =====================================================
+/* =========================================================
+   SEARCH
+========================================================= */
 
-async function deletePhoto(photoId, env) {
-  const photo = await env.DB.prepare(`
-    SELECT *
-    FROM photos
-    WHERE id = ?
-    LIMIT 1
-  `)
-    .bind(photoId)
+async function searchCatalog(env, request) {
+  const url = new URL(request.url);
+
+  const q = String(
+    url.searchParams.get("q") || ""
+  ).trim();
+
+  if (!q) {
+    return ok({
+      events: [],
+      cups: [],
+      matches: [],
+      photos: []
+    });
+  }
+
+  const search = `%${q}%`;
+
+  const [
+    events,
+    cups,
+    matches,
+    photos
+  ] = await Promise.all([
+    env.DB
+      .prepare(`
+        SELECT
+          id,
+          name,
+          location,
+          description,
+          created_at
+        FROM events
+        WHERE
+          name LIKE ?
+          OR location LIKE ?
+          OR description LIKE ?
+        ORDER BY created_at DESC
+        LIMIT 50
+      `)
+      .bind(search, search, search)
+      .all(),
+
+    env.DB
+      .prepare(`
+        SELECT
+          c.id,
+          c.event_id,
+          c.name,
+          c.description,
+          c.created_at,
+          e.name AS event_name
+        FROM cups c
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        WHERE
+          c.name LIKE ?
+          OR c.description LIKE ?
+          OR e.name LIKE ?
+        ORDER BY c.created_at DESC
+        LIMIT 50
+      `)
+      .bind(search, search, search)
+      .all(),
+
+    env.DB
+      .prepare(`
+        SELECT
+          m.id,
+          m.cup_id,
+          m.match_name,
+          m.team_a,
+          m.team_b,
+          m.match_date,
+          c.name AS cup_name,
+          e.name AS event_name
+        FROM matches m
+        LEFT JOIN cups c
+          ON c.id = m.cup_id
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        WHERE
+          m.match_name LIKE ?
+          OR m.team_a LIKE ?
+          OR m.team_b LIKE ?
+          OR c.name LIKE ?
+          OR e.name LIKE ?
+        ORDER BY m.match_date DESC
+        LIMIT 50
+      `)
+      .bind(
+        search,
+        search,
+        search,
+        search,
+        search
+      )
+      .all(),
+
+    env.DB
+      .prepare(`
+        SELECT
+          p.id,
+          p.match_id,
+          p.title,
+          p.photographer,
+          p.price,
+          p.image_url,
+          p.preview_path,
+          m.match_name,
+          m.team_a,
+          m.team_b,
+          c.name AS cup_name,
+          e.name AS event_name
+        FROM photos p
+        LEFT JOIN matches m
+          ON m.id = p.match_id
+        LEFT JOIN cups c
+          ON c.id = m.cup_id
+        LEFT JOIN events e
+          ON e.id = c.event_id
+        WHERE
+          p.title LIKE ?
+          OR p.photographer LIKE ?
+          OR m.match_name LIKE ?
+          OR m.team_a LIKE ?
+          OR m.team_b LIKE ?
+          OR c.name LIKE ?
+          OR e.name LIKE ?
+        ORDER BY p.created_at DESC
+        LIMIT 100
+      `)
+      .bind(
+        search,
+        search,
+        search,
+        search,
+        search,
+        search,
+        search
+      )
+      .all()
+  ]);
+
+  return ok({
+    events: events.results || [],
+    cups: cups.results || [],
+    matches: matches.results || [],
+    photos: photos.results || []
+  });
+}
+
+/* =========================================================
+   USER — PROFILE
+========================================================= */
+
+async function userProfile(request, env) {
+  const auth = await requireAuth(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const user = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        name,
+        email,
+        role,
+        created_at
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(auth.user.id)
     .first();
 
-  if (!photo) {
-    return json(
-      {
-        success: false,
-        message: "Foto tidak ditemukan."
-      },
+  if (!user) {
+    return error(
+      "User tidak ditemukan",
       404
     );
   }
 
-  if (env.PHOTOS) {
-    await env.PHOTOS.delete(photo.r2_key);
-  }
-
-  await env.DB.prepare(`
-    DELETE FROM transaction_items
-    WHERE photo_id = ?
-  `)
-    .bind(photoId)
-    .run();
-
-  await env.DB.prepare(`
-    DELETE FROM photos
-    WHERE id = ?
-  `)
-    .bind(photoId)
-    .run();
-
-  return json({
-    success: true,
-    message: "Foto berhasil dihapus."
+  return ok({
+    user
   });
 }
 
-// =====================================================
-// INSTANPAY
-// =====================================================
+/* =========================================================
+   USER — PURCHASED PHOTOS
+========================================================= */
 
-function getInstanPayBaseUrl(env) {
-  return cleanText(
-    env.INSTANPAY_BASE_URL ||
-    INSTANPAY_DEFAULT_BASE_URL
-  ).replace(/\/+$/, "");
+async function purchasedPhotos(
+  request,
+  env
+) {
+  const auth = await requireAuth(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        p.id,
+        p.title,
+        p.photographer,
+        p.price,
+        p.file_name,
+        p.content_type,
+        p.file_size,
+        p.image_url,
+        p.preview_path,
+        p.original_path,
+        p.created_at,
+
+        t.id AS transaction_id,
+        t.txn_id,
+        t.status,
+        t.paid_at,
+
+        m.match_name,
+        m.team_a,
+        m.team_b,
+
+        c.name AS cup_name,
+
+        e.name AS event_name
+
+      FROM transaction_items ti
+
+      INNER JOIN transactions t
+        ON t.id = ti.transaction_id
+
+      INNER JOIN photos p
+        ON p.id = ti.photo_id
+
+      LEFT JOIN matches m
+        ON m.id = p.match_id
+
+      LEFT JOIN cups c
+        ON c.id = m.cup_id
+
+      LEFT JOIN events e
+        ON e.id = c.event_id
+
+      WHERE
+        t.user_id = ?
+        AND LOWER(t.status) IN (
+          'paid',
+          'success',
+          'settlement',
+          'completed'
+        )
+
+      ORDER BY
+        t.paid_at DESC,
+        t.created_at DESC
+    `)
+    .bind(auth.user.id)
+    .all();
+
+  return ok({
+    photos: result.results || []
+  });
 }
 
-function getInstanPayKey(env) {
-  return cleanText(env.INSTANPAY_API_KEY);
+/* =========================================================
+   USER — TRANSACTIONS
+========================================================= */
+
+async function userTransactions(
+  request,
+  env
+) {
+  const auth = await requireAuth(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        ref_id,
+        txn_id,
+        amount,
+        unique_amount,
+        fee,
+        net_amount,
+        status,
+        payment_url,
+        qris_string,
+        expired_at,
+        paid_at,
+        created_at
+      FROM transactions
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `)
+    .bind(auth.user.id)
+    .all();
+
+  return ok({
+    transactions: result.results || []
+  });
 }
+
+/* =========================================================
+   PAYMENT CONFIG
+========================================================= */
+
+async function getPaymentConfig(env) {
+  const row = await env.DB
+    .prepare(`
+      SELECT
+        api_key,
+        base_url,
+        updated_at
+      FROM payment_config
+      WHERE id = 1
+      LIMIT 1
+    `)
+    .first();
+
+  return {
+    apiKey:
+      row?.api_key ||
+      env.INSTANPAY_API_KEY ||
+      "",
+
+    baseUrl:
+      row?.base_url ||
+      env.INSTANPAY_BASE_URL ||
+      "https://pay.instanlive.id/api/v1"
+  };
+}
+
+/* =========================================================
+   ADMIN — PAYMENT CONFIG
+========================================================= */
+
+async function adminPaymentConfig(
+  request,
+  env
+) {
+  const auth = await requireAdmin(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  if (request.method === "GET") {
+    const config =
+      await getPaymentConfig(env);
+
+    return ok({
+      configured: Boolean(
+        config.apiKey
+      ),
+      base_url: config.baseUrl
+    });
+  }
+
+  if (request.method === "POST" ||
+      request.method === "PUT") {
+    let body;
+
+    try {
+      body = await request.json();
+    } catch {
+      return error("Invalid JSON");
+    }
+
+    const apiKey = String(
+      body.api_key ||
+      body.apiKey ||
+      ""
+    ).trim();
+
+    const baseUrl = String(
+      body.base_url ||
+      body.baseUrl ||
+      "https://pay.instanlive.id/api/v1"
+    ).trim();
+
+    if (!apiKey) {
+      return error(
+        "InstanPay API Key wajib diisi"
+      );
+    }
+
+    if (!baseUrl) {
+      return error(
+        "InstanPay Base URL wajib diisi"
+      );
+    }
+
+    await env.DB
+      .prepare(`
+        INSERT INTO payment_config
+        (
+          id,
+          api_key,
+          base_url,
+          updated_at
+        )
+        VALUES (1, ?, ?, ?)
+
+        ON CONFLICT(id)
+        DO UPDATE SET
+          api_key = excluded.api_key,
+          base_url = excluded.base_url,
+          updated_at = excluded.updated_at
+      `)
+      .bind(
+        apiKey,
+        baseUrl.replace(/\/+$/, ""),
+        now()
+      )
+      .run();
+
+    return ok({
+      message:
+        "Payment configuration berhasil disimpan",
+      base_url:
+        baseUrl.replace(/\/+$/, "")
+    });
+  }
+
+  return error(
+    "Method not allowed",
+    405
+  );
+}
+
+/* =========================================================
+   PAYMENT HELPER
+========================================================= */
 
 async function instanPayRequest(
   env,
   path,
   options = {}
 ) {
-  const apiKey = getInstanPayKey(env);
+  const config =
+    await getPaymentConfig(env);
 
-  if (!apiKey) {
+  if (!config.apiKey) {
     throw new Error(
-      "INSTANPAY_API_KEY belum dikonfigurasi."
+      "InstanPay API Key belum dikonfigurasi"
     );
   }
 
-  const baseUrl = getInstanPayBaseUrl(env);
+  const base =
+    config.baseUrl.replace(/\/+$/, "");
 
-  const headers = new Headers(
-    options.headers || {}
-  );
+  const url =
+    base + "/" + path.replace(/^\/+/, "");
 
-  headers.set("X-Api-Key", apiKey);
-  headers.set("Content-Type", "application/json");
+  const headers = {
+    "Content-Type":
+      "application/json",
+    "X-Api-Key":
+      config.apiKey
+  };
 
-  const response = await fetch(
-    `${baseUrl}${path}`,
-    {
-      ...options,
-      headers
-    }
-  );
+  const response =
+    await fetch(url, {
+      method:
+        options.method || "GET",
+      headers,
+      body:
+        options.body
+          ? JSON.stringify(options.body)
+          : undefined
+    });
+
+  const text =
+    await response.text();
 
   let data;
 
   try {
-    data = await response.json();
+    data = JSON.parse(text);
   } catch {
     data = {
-      ok: false,
-      error: "invalid_json_response"
+      raw: text
     };
   }
 
-  return {
-    response,
-    data
-  };
+  if (!response.ok) {
+    throw new Error(
+      data?.message ||
+      data?.error ||
+      `InstanPay HTTP ${response.status}`
+    );
+  }
+
+  return data;
 }
 
-// =====================================================
-// CREATE PAYMENT
-// =====================================================
+/* =========================================================
+   PAYMENT — CREATE
+========================================================= */
 
-async function createPayment(request, env) {
-  const auth = await requireAuth(request, env);
+async function createPayment(
+  request,
+  env
+) {
+  const auth = await requireAuth(
+    request,
+    env
+  );
 
-  if (auth.error) return auth.error;
+  if (auth.error) {
+    return auth.error;
+  }
 
   let body;
 
   try {
     body = await request.json();
   } catch {
-    return json(
-      {
-        success: false,
-        message: "JSON tidak valid."
-      },
-      400
-    );
+    return error("Invalid JSON");
   }
 
-  const photoIds = Array.isArray(body.photo_ids)
-    ? body.photo_ids
-    : [];
+  let photoIds =
+    body.photo_ids ||
+    body.photoIds ||
+    [];
+
+  if (!Array.isArray(photoIds)) {
+    photoIds = [photoIds];
+  }
+
+  photoIds = [
+    ...new Set(
+      photoIds
+        .map(x => String(x).trim())
+        .filter(Boolean)
+    )
+  ];
 
   if (!photoIds.length) {
-    return json(
-      {
-        success: false,
-        message: "Minimal satu foto harus dipilih."
-      },
-      422
+    return error(
+      "Minimal satu foto harus dipilih"
     );
   }
 
   const placeholders =
     photoIds.map(() => "?").join(",");
 
-  const result = await env.DB.prepare(`
-    SELECT
-      id,
-      title,
-      price
-    FROM photos
-    WHERE id IN (${placeholders})
-  `)
+  const photos = await env.DB
+    .prepare(`
+      SELECT
+        id,
+        title,
+        price,
+        match_id
+      FROM photos
+      WHERE id IN (${placeholders})
+    `)
     .bind(...photoIds)
     .all();
 
-  const photos = result.results || [];
+  const rows =
+    photos.results || [];
 
-  if (photos.length !== photoIds.length) {
-    return json(
-      {
-        success: false,
-        message: "Ada foto yang tidak ditemukan."
-      },
+  if (rows.length !== photoIds.length) {
+    return error(
+      "Ada foto yang tidak ditemukan",
       404
     );
   }
 
-  const amount = photos.reduce(
-    (sum, photo) =>
-      sum + Number(photo.price || 0),
-    0
-  );
+  /*
+    Jangan membuat transaksi baru untuk
+    foto yang sudah berhasil dibeli user.
+  */
 
-  if (amount < 100) {
-    return json(
-      {
-        success: false,
-        message: "Total pembayaran tidak valid."
-      },
-      422
+  const purchased =
+    await env.DB
+      .prepare(`
+        SELECT DISTINCT
+          ti.photo_id
+        FROM transaction_items ti
+        INNER JOIN transactions t
+          ON t.id = ti.transaction_id
+        WHERE
+          t.user_id = ?
+          AND ti.photo_id IN (${placeholders})
+          AND LOWER(t.status) IN (
+            'paid',
+            'success',
+            'settlement',
+            'completed'
+          )
+      `)
+      .bind(
+        auth.user.id,
+        ...photoIds
+      )
+      .all();
+
+  const purchasedIds =
+    new Set(
+      (purchased.results || [])
+        .map(x => x.photo_id)
+    );
+
+  const unpaidRows =
+    rows.filter(
+      photo =>
+        !purchasedIds.has(photo.id)
+    );
+
+  if (!unpaidRows.length) {
+    return error(
+      "Semua foto sudah dibeli",
+      409
     );
   }
 
-  const transactionId = randomId("trx_");
+  const amount =
+    unpaidRows.reduce(
+      (sum, photo) =>
+        sum + Number(photo.price || 0),
+      0
+    );
+
+  if (!Number.isFinite(amount) ||
+      amount <= 0) {
+    return error(
+      "Total pembayaran tidak valid"
+    );
+  }
+
+  const transactionId =
+    id("trx_");
 
   const refId =
-    `MOM-${Date.now()}-${transactionId.slice(-8)}`;
-
-  const description =
-    `Pembelian ${photos.length} foto Momentra`;
+    `MOMENTRA-${Date.now()}-${transactionId.slice(-8)}`;
 
   const redirectUrl =
-    cleanText(body.redirect_url) ||
-    "";
+    String(
+      body.redirect_url ||
+      body.redirectUrl ||
+      ""
+    ).trim();
 
-  const instanBody = {
-    ref_id: refId,
-    amount,
-    description
-  };
+  let payment;
 
-  if (redirectUrl) {
-    instanBody.redirect_url = redirectUrl;
+  try {
+    payment =
+      await instanPayRequest(
+        env,
+        "/transaction/create",
+        {
+          method: "POST",
+          body: {
+            ref_id: refId,
+            amount,
+            description:
+              `Pembelian ${unpaidRows.length} foto Momentra`,
+            ...(redirectUrl
+              ? {
+                  redirect_url:
+                    redirectUrl
+                }
+              : {})
+          }
+        }
+      );
+  } catch (err) {
+    return error(
+      err.message ||
+      "Gagal membuat pembayaran",
+      502
+    );
   }
 
-  const { response, data } =
-    await instanPayRequest(
-      env,
-      "/transaction/create",
-      {
-        method: "POST",
-        body: JSON.stringify(instanBody)
-      }
+  /*
+    InstanPay biasanya menaruh data
+    transaksi di property "data".
+  */
+
+  const data =
+    payment?.data ||
+    payment?.result ||
+    payment;
+
+  const txnId =
+    data?.txn_id ||
+    data?.transaction_id ||
+    null;
+
+  const uniqueAmount =
+    Number(
+      data?.unique_amount ??
+      data?.amount ??
+      amount
     );
 
-  if (!response.ok || !data.ok) {
-    return json(
-      {
-        success: false,
-        message:
-          data?.error ||
-          data?.message ||
-          "Gagal membuat pembayaran.",
-        instanpay: data
-      },
-      response.status || 502
+  const fee =
+    Number(
+      data?.fee || 0
     );
-  }
 
-  const payment = data.data;
+  const netAmount =
+    Number(
+      data?.net_amount ||
+      Math.max(
+        0,
+        uniqueAmount - fee
+      )
+    );
 
-  const now = new Date().toISOString();
+  const paymentUrl =
+    data?.payment_url ||
+    data?.checkout_url ||
+    null;
 
-  await env.DB.prepare(`
-    INSERT INTO transactions (
-      id,
-      user_id,
-      ref_id,
-      instanpay_txn_id,
-      amount,
-      unique_amount,
-      fee,
-      net_amount,
-      status,
-      payment_url,
-      qris_string,
-      description,
-      paid_at,
-      created_at,
-      updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
+  const qrisString =
+    data?.qris_string ||
+    data?.qris ||
+    null;
+
+  const status =
+    String(
+      data?.status ||
+      "pending"
+    ).toLowerCase();
+
+  const expiredAt =
+    data?.expired_at ||
+    data?.expires_at ||
+    null;
+
+  await env.DB
+    .prepare(`
+      INSERT INTO transactions
+      (
+        id,
+        user_id,
+        ref_id,
+        txn_id,
+        amount,
+        unique_amount,
+        fee,
+        net_amount,
+        status,
+        payment_url,
+        qris_string,
+        expired_at,
+        created_at
+      )
+      VALUES
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
     .bind(
       transactionId,
       auth.user.id,
       refId,
-      Number(payment.txn_id),
+      txnId,
       amount,
-      Number(payment.unique_amount || amount),
-      Number(payment.fee || 0),
-      Number(payment.net_amount || 0),
-      cleanText(payment.status) || "pending",
-      cleanText(payment.payment_url),
-      cleanText(payment.qris_string),
-      description,
-      null,
-      now,
-      now
+      uniqueAmount,
+      fee,
+      netAmount,
+      status,
+      paymentUrl,
+      qrisString,
+      expiredAt,
+      now()
     )
     .run();
 
-  for (const photo of photos) {
-    await env.DB.prepare(`
-      INSERT INTO transaction_items (
-        id,
-        transaction_id,
-        photo_id,
-        price,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `)
+  for (const photo of unpaidRows) {
+    await env.DB
+      .prepare(`
+        INSERT INTO transaction_items
+        (
+          id,
+          transaction_id,
+          photo_id,
+          price,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+      `)
       .bind(
-        randomId("item_"),
+        id("item_"),
         transactionId,
         photo.id,
         Number(photo.price || 0),
-        now
+        now()
       )
       .run();
   }
@@ -1445,737 +2621,758 @@ async function createPayment(request, env) {
     transaction: {
       id: transactionId,
       ref_id: refId,
-      txn_id: payment.txn_id,
-      amount: payment.amount,
-      unique_amount: payment.unique_amount,
-      fee: payment.fee,
-      net_amount: payment.net_amount,
-      status: payment.status,
-      payment_url: payment.payment_url,
-      qris_string: payment.qris_string,
-      expired_in_minutes:
-        payment.expired_in_minutes,
-      simulate_url:
-        payment.simulate_url || null
-    }
-  });
-}
-
-// =====================================================
-// PAYMENT STATUS
-// =====================================================
-
-async function getPaymentStatus(
-  txnId,
-  request,
-  env
-) {
-  const auth = await requireAuth(request, env);
-
-  if (auth.error) return auth.error;
-
-  const transaction = await env.DB.prepare(`
-    SELECT *
-    FROM transactions
-    WHERE instanpay_txn_id = ?
-      AND user_id = ?
-    LIMIT 1
-  `)
-    .bind(Number(txnId), auth.user.id)
-    .first();
-
-  if (!transaction) {
-    return json(
-      {
-        success: false,
-        message: "Transaksi tidak ditemukan."
-      },
-      404
-    );
-  }
-
-  const { response, data } =
-    await instanPayRequest(
-      env,
-      `/transaction/status/${encodeURIComponent(txnId)}`,
-      {
-        method: "GET"
-      }
-    );
-
-  if (!response.ok || !data.ok) {
-    return json(
-      {
-        success: false,
-        message:
-          data?.error ||
-          data?.message ||
-          "Gagal mengecek status.",
-        instanpay: data
-      },
-      response.status || 502
-    );
-  }
-
-  const payment = data.data;
-
-  await updateTransactionStatus(
-    transaction,
-    payment,
-    env
-  );
-
-  return json({
-    success: true,
-    transaction: {
-      id: transaction.id,
-      ref_id: transaction.ref_id,
-      txn_id: payment.txn_id,
-      status: payment.status,
-      amount: payment.amount,
-      unique_amount: payment.unique_amount,
-      paid_at: payment.paid_at || null
-    }
-  });
-}
-
-// =====================================================
-// UPDATE TRANSACTION
-// =====================================================
-
-async function updateTransactionStatus(
-  transaction,
-  payment,
-  env
-) {
-  const status = cleanText(payment.status);
-
-  if (!status) return;
-
-  const paidAt =
-    payment.paid_at ||
-    (status === "paid"
-      ? new Date().toISOString()
-      : null);
-
-  const updatedAt =
-    new Date().toISOString();
-
-  await env.DB.prepare(`
-    UPDATE transactions
-    SET
-      status = ?,
-      unique_amount = ?,
-      fee = ?,
-      net_amount = ?,
-      paid_at = ?,
-      updated_at = ?
-    WHERE id = ?
-  `)
-    .bind(
+      txn_id: txnId,
+      amount,
+      unique_amount: uniqueAmount,
+      fee,
+      net_amount: netAmount,
       status,
-      Number(
-        payment.unique_amount ??
-        transaction.unique_amount ??
-        0
-      ),
-      Number(
-        payment.fee ??
-        transaction.fee ??
-        0
-      ),
-      Number(
-        payment.net_amount ??
-        transaction.net_amount ??
-        0
-      ),
-      paidAt,
-      updatedAt,
-      transaction.id
-    )
-    .run();
+      payment_url: paymentUrl,
+      qris_string: qrisString,
+      expired_in_minutes:
+        data?.expired_in_minutes ||
+        data?.expire_in_minutes ||
+        null,
+      expired_at: expiredAt,
+      photo_ids:
+        unpaidRows.map(
+          photo => photo.id
+        )
+    }
+  }, 201);
 }
 
-// =====================================================
-// WEBHOOK SIGNATURE
-// =====================================================
+/* =========================================================
+   PAYMENT — STATUS
+========================================================= */
 
-async function hmacSha256(
-  key,
-  message
-) {
-  const cryptoKey =
-    await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(key),
-      {
-        name: "HMAC",
-        hash: "SHA-256"
-      },
-      false,
-      ["sign"]
-    );
-
-  const signature =
-    await crypto.subtle.sign(
-      "HMAC",
-      cryptoKey,
-      new TextEncoder().encode(message)
-    );
-
-  return bytesToHex(signature);
-}
-
-function sortObjectKeys(data) {
-  const sorted = {};
-
-  for (
-    const key of Object.keys(data).sort()
-  ) {
-    sorted[key] = data[key];
-  }
-
-  return sorted;
-}
-
-async function verifyInstanPayWebhook(
-  body,
-  apiKey
-) {
-  const signature = body.signature;
-
-  if (!signature) {
-    return false;
-  }
-
-  const data = {
-    ...body
-  };
-
-  delete data.signature;
-
-  const sorted =
-    sortObjectKeys(data);
-
-  const payload = JSON.stringify(
-    sorted
-  );
-
-  const calculated =
-    await hmacSha256(
-      apiKey,
-      payload
-    );
-
-  if (
-    calculated.length !==
-    String(signature).length
-  ) {
-    return false;
-  }
-
-  let diff = 0;
-
-  for (
-    let i = 0;
-    i < calculated.length;
-    i++
-  ) {
-    diff |=
-      calculated.charCodeAt(i) ^
-      String(signature).charCodeAt(i);
-  }
-
-  return diff === 0;
-}
-
-// =====================================================
-// WEBHOOK
-// =====================================================
-
-async function paymentWebhook(
+async function paymentStatus(
   request,
   env
 ) {
-  const apiKey =
-    getInstanPayKey(env);
-
-  if (!apiKey) {
-    return json(
-      {
-        success: false,
-        message:
-          "INSTANPAY_API_KEY belum dikonfigurasi."
-      },
-      500
-    );
-  }
-
-  let body;
-
-  try {
-    body = await request.json();
-  } catch {
-    return json(
-      {
-        success: false,
-        message: "JSON tidak valid."
-      },
-      400
-    );
-  }
-
-  const valid =
-    await verifyInstanPayWebhook(
-      body,
-      apiKey
-    );
-
-  if (!valid) {
-    return json(
-      {
-        success: false,
-        message: "Invalid signature."
-      },
-      401
-    );
-  }
-
-  const refId =
-    cleanText(body.ref_id);
-
-  const txnId =
-    Number(body.txn_id);
-
-  const transaction =
-    await env.DB.prepare(`
-      SELECT *
-      FROM transactions
-      WHERE ref_id = ?
-         OR instanpay_txn_id = ?
-      LIMIT 1
-    `)
-      .bind(refId, txnId)
-      .first();
-
-  if (!transaction) {
-    return json(
-      {
-        success: true,
-        message:
-          "Webhook valid tetapi transaksi Momentra tidak ditemukan."
-      }
-    );
-  }
-
-  await updateTransactionStatus(
-    transaction,
-    body,
+  const auth = await requireAuth(
+    request,
     env
   );
 
-  return json({
-    success: true,
-    message: "Webhook diterima."
-  });
-}
-
-// =====================================================
-// ADMIN TRANSACTIONS
-// =====================================================
-
-async function getAdminTransactions(
-  request,
-  env
-) {
-  const auth =
-    await requireAdmin(
-      request,
-      env
-    );
-
-  if (auth.error) return auth.error;
+  if (auth.error) {
+    return auth.error;
+  }
 
   const url =
     new URL(request.url);
 
-  const status =
-    cleanText(url.searchParams.get("status"));
+  const txnId =
+    url.pathname.split("/").pop();
 
-  const search =
-    cleanText(url.searchParams.get("search"));
-
-  let query = `
-    SELECT
-      transactions.*,
-      users.name AS user_name,
-      users.email AS user_email,
-      (
-        SELECT COUNT(*)
-        FROM transaction_items
-        WHERE transaction_items.transaction_id =
-          transactions.id
-      ) AS photo_count
-    FROM transactions
-    JOIN users ON users.id = transactions.user_id
-    WHERE 1 = 1
-  `;
-
-  const binds = [];
-
-  if (status) {
-    query += `
-      AND transactions.status = ?
-    `;
-
-    binds.push(status);
-  }
-
-  if (search) {
-    query += `
-      AND (
-        transactions.ref_id LIKE ?
-        OR users.name LIKE ?
-        OR users.email LIKE ?
-      )
-    `;
-
-    const q = `%${search}%`;
-
-    binds.push(q, q, q);
-  }
-
-  query += `
-    ORDER BY transactions.created_at DESC
-    LIMIT 200
-  `;
-
-  const result =
-    await env.DB.prepare(query)
-      .bind(...binds)
-      .all();
-
-  return json({
-    success: true,
-    transactions:
-      result.results || []
-  });
-}
-
-// =====================================================
-// USER TRANSACTIONS
-// =====================================================
-
-async function getUserTransactions(
-  request,
-  env
-) {
-  const auth =
-    await requireAuth(
-      request,
-      env
-    );
-
-  if (auth.error) return auth.error;
-
-  const result =
-    await env.DB.prepare(`
-      SELECT
-        transactions.*,
-        (
-          SELECT COUNT(*)
-          FROM transaction_items
-          WHERE transaction_items.transaction_id =
-            transactions.id
-        ) AS photo_count
-      FROM transactions
-      WHERE user_id = ?
-      ORDER BY created_at DESC
-    `)
-      .bind(auth.user.id)
-      .all();
-
-  return json({
-    success: true,
-    transactions:
-      result.results || []
-  });
-}
-
-// =====================================================
-// USER PURCHASED PHOTOS
-// =====================================================
-
-async function getPurchasedPhotos(
-  request,
-  env
-) {
-  const auth =
-    await requireAuth(
-      request,
-      env
-    );
-
-  if (auth.error) return auth.error;
-
-  const result =
-    await env.DB.prepare(`
-      SELECT
-        photos.id,
-        photos.title,
-        photos.photographer,
-        photos.price,
-        photos.match_id,
-        transactions.id AS transaction_id,
-        transactions.paid_at
-      FROM transaction_items
-      JOIN transactions
-        ON transactions.id =
-           transaction_items.transaction_id
-      JOIN photos
-        ON photos.id =
-           transaction_items.photo_id
-      WHERE transactions.user_id = ?
-        AND transactions.status = 'paid'
-      ORDER BY transactions.paid_at DESC
-    `)
-      .bind(auth.user.id)
-      .all();
-
-  return json({
-    success: true,
-    photos: result.results || []
-  });
-}
-
-// =====================================================
-// PAYMENT TEST CONNECTION
-// =====================================================
-
-async function testPaymentConnection(
-  request,
-  env
-) {
-  const auth =
-    await requireAdmin(
-      request,
-      env
-    );
-
-  if (auth.error) return auth.error;
-
-  const apiKey =
-    getInstanPayKey(env);
-
-  if (!apiKey) {
-    return json(
-      {
-        success: false,
-        connected: false,
-        message:
-          "INSTANPAY_API_KEY belum dikonfigurasi."
-      },
-      500
-    );
-  }
-
-  try {
-    const {
-      response,
-      data
-    } = await instanPayRequest(
-      env,
-      "/balance",
-      {
-        method: "GET"
-      }
-    );
-
-    return json({
-      success: response.ok && data.ok,
-      connected:
-        response.ok && data.ok,
-      mode:
-        data?.data?.mode || null,
-      currency:
-        data?.data?.currency || null,
-      message:
-        response.ok && data.ok
-          ? "Koneksi InstanPay berhasil."
-          : (
-            data?.error ||
-            data?.message ||
-            "Koneksi gagal."
-          )
-    });
-  } catch (error) {
-    return json(
-      {
-        success: false,
-        connected: false,
-        message: error.message
-      },
-      500
-    );
-  }
-}
-
-// =====================================================
-// PAYMENT CONFIG
-// =====================================================
-
-async function getPaymentConfig(
-  request,
-  env
-) {
-  const auth =
-    await requireAdmin(
-      request,
-      env
-    );
-
-  if (auth.error) return auth.error;
-
-  const apiKey =
-    getInstanPayKey(env);
-
-  let mode = null;
-
-  if (apiKey.startsWith("sk_live_")) {
-    mode = "live";
-  } else if (
-    apiKey.startsWith("sk_test_")
-  ) {
-    mode = "sandbox";
-  }
-
-  return json({
-    success: true,
-    config: {
-      base_url:
-        getInstanPayBaseUrl(env),
-      configured:
-        Boolean(apiKey),
-      mode
-    }
-  });
-}
-
-// =====================================================
-// SANDBOX SIMULATION
-// =====================================================
-
-async function simulateSandboxPayment(
-  txnId,
-  request,
-  env
-) {
-  const auth =
-    await requireAuth(
-      request,
-      env
-    );
-
-  if (auth.error) return auth.error;
-
-  const apiKey =
-    getInstanPayKey(env);
-
-  if (
-    !apiKey.startsWith("sk_test_")
-  ) {
-    return json(
-      {
-        success: false,
-        message:
-          "Sandbox simulation hanya dapat digunakan dengan sk_test_."
-      },
-      403
+  if (!txnId) {
+    return error(
+      "Transaction ID wajib diisi"
     );
   }
 
   const transaction =
-    await env.DB.prepare(`
-      SELECT *
-      FROM transactions
-      WHERE instanpay_txn_id = ?
-        AND user_id = ?
-      LIMIT 1
-    `)
+    await env.DB
+      .prepare(`
+        SELECT
+          *
+        FROM transactions
+        WHERE
+          txn_id = ?
+          AND user_id = ?
+        LIMIT 1
+      `)
       .bind(
-        Number(txnId),
+        txnId,
         auth.user.id
       )
       .first();
 
   if (!transaction) {
-    return json(
-      {
-        success: false,
-        message: "Transaksi tidak ditemukan."
-      },
+    return error(
+      "Transaksi tidak ditemukan",
       404
     );
   }
 
-  const {
-    response,
-    data
-  } = await instanPayRequest(
-    env,
-    `/sandbox/pay/${encodeURIComponent(txnId)}`,
-    {
-      method: "POST"
-    }
-  );
+  let remote;
 
-  if (!response.ok || !data.ok) {
-    return json(
-      {
-        success: false,
-        message:
-          data?.error ||
-          data?.message ||
-          "Sandbox payment gagal.",
-        instanpay: data
-      },
-      response.status || 502
+  try {
+    remote =
+      await instanPayRequest(
+        env,
+        `/transaction/status/${encodeURIComponent(txnId)}`
+      );
+  } catch (err) {
+    return error(
+      err.message ||
+      "Gagal mengambil status pembayaran",
+      502
     );
   }
 
-  const statusResult =
-    await instanPayRequest(
-      env,
-      `/transaction/status/${encodeURIComponent(txnId)}`,
-      {
-        method: "GET"
-      }
-    );
+  const data =
+    remote?.data ||
+    remote?.result ||
+    remote;
+
+  const newStatus =
+    String(
+      data?.status ||
+      transaction.status ||
+      "pending"
+    ).toLowerCase();
+
+  let paidAt =
+    transaction.paid_at;
 
   if (
-    statusResult.response.ok &&
-    statusResult.data.ok
+    [
+      "paid",
+      "success",
+      "settlement",
+      "completed"
+    ].includes(newStatus) &&
+    !paidAt
   ) {
-    await updateTransactionStatus(
-      transaction,
-      statusResult.data.data,
-      env
-    );
+    paidAt = now();
   }
 
-  return json({
-    success: true,
-    message:
-      "Sandbox payment berhasil disimulasikan.",
-    instanpay: data.data
+  await env.DB
+    .prepare(`
+      UPDATE transactions
+      SET
+        status = ?,
+        paid_at = ?
+      WHERE id = ?
+    `)
+    .bind(
+      newStatus,
+      paidAt || null,
+      transaction.id
+    )
+    .run();
+
+  return ok({
+    transaction: {
+      id: transaction.id,
+      ref_id: transaction.ref_id,
+      txn_id: transaction.txn_id,
+      status: newStatus,
+      amount: transaction.amount,
+      unique_amount:
+        transaction.unique_amount,
+      paid_at: paidAt || null
+    }
   });
 }
 
-// =====================================================
-// DASHBOARD
-// =====================================================
+/* =========================================================
+   PAYMENT — WEBHOOK
+========================================================= */
 
-async function getAdminDashboard(
+async function paymentWebhook(
+  request,
+  env
+) {
+  let body;
+
+  try {
+    body = await request.json();
+  } catch {
+    return error(
+      "Invalid JSON"
+    );
+  }
+
+  const data =
+    body?.data ||
+    body?.result ||
+    body;
+
+  const txnId =
+    data?.txn_id ||
+    data?.transaction_id ||
+    body?.txn_id ||
+    body?.transaction_id;
+
+  const refId =
+    data?.ref_id ||
+    body?.ref_id ||
+    null;
+
+  const status =
+    String(
+      data?.status ||
+      body?.status ||
+      "pending"
+    ).toLowerCase();
+
+  if (!txnId && !refId) {
+    return error(
+      "Transaction identifier tidak ditemukan"
+    );
+  }
+
+  let transaction;
+
+  if (txnId) {
+    transaction =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM transactions
+          WHERE txn_id = ?
+          LIMIT 1
+        `)
+        .bind(txnId)
+        .first();
+  }
+
+  if (!transaction && refId) {
+    transaction =
+      await env.DB
+        .prepare(`
+          SELECT *
+          FROM transactions
+          WHERE ref_id = ?
+          LIMIT 1
+        `)
+        .bind(refId)
+        .first();
+  }
+
+  if (!transaction) {
+    return error(
+      "Transaksi tidak ditemukan",
+      404
+    );
+  }
+
+  let paidAt =
+    transaction.paid_at;
+
+  if (
+    [
+      "paid",
+      "success",
+      "settlement",
+      "completed"
+    ].includes(status) &&
+    !paidAt
+  ) {
+    paidAt = now();
+  }
+
+  await env.DB
+    .prepare(`
+      UPDATE transactions
+      SET
+        status = ?,
+        paid_at = ?
+      WHERE id = ?
+    `)
+    .bind(
+      status,
+      paidAt || null,
+      transaction.id
+    )
+    .run();
+
+  return ok({
+    message:
+      "Webhook diterima",
+    transaction_id:
+      transaction.id,
+    status
+  });
+}
+
+/* =========================================================
+   ADMIN — TRANSACTIONS
+========================================================= */
+
+async function adminTransactions(
+  request,
+  env
+) {
+  const auth = await requireAdmin(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const result = await env.DB
+    .prepare(`
+      SELECT
+        t.*,
+        u.name AS user_name,
+        u.email AS user_email,
+
+        (
+          SELECT COUNT(*)
+          FROM transaction_items ti
+          WHERE
+            ti.transaction_id = t.id
+        ) AS photo_count
+
+      FROM transactions t
+
+      LEFT JOIN users u
+        ON u.id = t.user_id
+
+      ORDER BY
+        t.created_at DESC
+    `)
+    .all();
+
+  return ok({
+    transactions:
+      result.results || []
+  });
+}
+
+/* =========================================================
+   ADMIN — PAYMENT TEST
+========================================================= */
+
+async function adminPaymentTest(
+  request,
+  env
+) {
+  const auth = await requireAdmin(
+    request,
+    env
+  );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  try {
+    const config =
+      await getPaymentConfig(env);
+
+    if (!config.apiKey) {
+      return error(
+        "InstanPay API Key belum dikonfigurasi"
+      );
+    }
+
+    const response =
+      await fetch(
+        config.baseUrl.replace(/\/+$/, ""),
+        {
+          method: "GET",
+          headers: {
+            "X-Api-Key":
+              config.apiKey
+          }
+        }
+      );
+
+    return ok({
+      configured: true,
+      status: response.status,
+      message:
+        response.ok
+          ? "Koneksi InstanPay berhasil"
+          : "InstanPay merespons dengan status " +
+            response.status
+    });
+  } catch (err) {
+    return error(
+      err.message ||
+      "Gagal menghubungi InstanPay",
+      502
+    );
+  }
+}
+
+/* =========================================================
+   GITHUB CONFIG
+========================================================= */
+
+function githubConfig(env) {
+  return {
+    token:
+      env.GITHUB_TOKEN || "",
+
+    owner:
+      env.GITHUB_OWNER ||
+      "Kaelzy16",
+
+    repo:
+      env.GITHUB_REPO ||
+      "Momentraa",
+
+    branch:
+      env.GITHUB_BRANCH ||
+      "main",
+
+    folder:
+      env.GITHUB_PHOTO_FOLDER ||
+      "photos"
+  };
+}
+
+/* =========================================================
+   GITHUB — GET FILE
+========================================================= */
+
+async function githubGetFile(
+  env,
+  path
+) {
+  const config =
+    githubConfig(env);
+
+  if (!config.token) {
+    throw new Error(
+      "GITHUB_TOKEN belum dikonfigurasi"
+    );
+  }
+
+  const cleanPath =
+    String(path || "")
+      .replace(/^\/+/, "");
+
+  const apiUrl =
+    "https://api.github.com/repos/" +
+    encodeURIComponent(config.owner) +
+    "/" +
+    encodeURIComponent(config.repo) +
+    "/contents/" +
+    cleanPath +
+    "?ref=" +
+    encodeURIComponent(config.branch);
+
+  const response =
+    await fetch(apiUrl, {
+      headers: {
+        "Authorization":
+          `Bearer ${config.token}`,
+
+        "Accept":
+          "application/vnd.github+json",
+
+        "X-GitHub-Api-Version":
+          "2022-11-28",
+
+        "User-Agent":
+          "Momentra-Worker"
+      }
+    });
+
+  if (!response.ok) {
+    const text =
+      await response.text();
+
+    throw new Error(
+      `GitHub HTTP ${response.status}: ${text}`
+    );
+  }
+
+  return await response.json();
+}
+
+/* =========================================================
+   GITHUB — RAW URL
+========================================================= */
+
+function githubRawUrl(
+  env,
+  path
+) {
+  const config =
+    githubConfig(env);
+
+  const cleanPath =
+    String(path || "")
+      .replace(/^\/+/, "");
+
+  return (
+    "https://raw.githubusercontent.com/" +
+    encodeURIComponent(config.owner) +
+    "/" +
+    encodeURIComponent(config.repo) +
+    "/" +
+    encodeURIComponent(config.branch) +
+    "/" +
+    cleanPath
+  );
+}
+
+/* =========================================================
+   PHOTO DOWNLOAD
+   Hanya user yang sudah membayar.
+========================================================= */
+
+async function downloadPhoto(
+  request,
+  env
+) {
+  const auth =
+    await requireAuth(
+      request,
+      env
+    );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const photoId =
+    url.searchParams.get("id") ||
+    url.pathname.split("/").pop();
+
+  if (!photoId) {
+    return error(
+      "Photo ID wajib diisi"
+    );
+  }
+
+  /*
+    Pastikan foto memang pernah dibeli
+    oleh user yang sedang login dan
+    transaksi sudah sukses.
+  */
+
+  const item =
+    await env.DB
+      .prepare(`
+        SELECT
+          p.id,
+          p.file_name,
+          p.content_type,
+          p.original_path,
+
+          t.id AS transaction_id,
+          t.txn_id,
+          t.status,
+          t.paid_at
+
+        FROM transaction_items ti
+
+        INNER JOIN transactions t
+          ON t.id = ti.transaction_id
+
+        INNER JOIN photos p
+          ON p.id = ti.photo_id
+
+        WHERE
+          ti.photo_id = ?
+          AND t.user_id = ?
+          AND LOWER(t.status) IN (
+            'paid',
+            'success',
+            'settlement',
+            'completed'
+          )
+
+        ORDER BY
+          t.paid_at DESC,
+          t.created_at DESC
+
+        LIMIT 1
+      `)
+      .bind(
+        photoId,
+        auth.user.id
+      )
+      .first();
+
+  if (!item) {
+    return error(
+      "Foto belum dibeli atau pembayaran belum berhasil",
+      403
+    );
+  }
+
+  if (!item.original_path) {
+    return error(
+      "File original tidak tersedia",
+      404
+    );
+  }
+
+  /*
+    Ambil file original melalui
+    GitHub API supaya token GitHub
+    tidak pernah dikirim ke browser.
+  */
+
+  let githubFile;
+
+  try {
+    githubFile =
+      await githubGetFile(
+        env,
+        item.original_path
+      );
+  } catch (err) {
+    return error(
+      err.message ||
+      "Gagal mengambil file original",
+      502
+    );
+  }
+
+  if (!githubFile.content) {
+    return error(
+      "Konten file tidak ditemukan di GitHub",
+      404
+    );
+  }
+
+  try {
+    const base64 =
+      githubFile.content
+        .replace(/\s/g, "");
+
+    const binary =
+      atob(base64);
+
+    const bytes =
+      new Uint8Array(
+        binary.length
+      );
+
+    for (
+      let i = 0;
+      i < binary.length;
+      i++
+    ) {
+      bytes[i] =
+        binary.charCodeAt(i);
+    }
+
+    const contentType =
+      item.content_type ||
+      "application/octet-stream";
+
+    const fileName =
+      item.file_name ||
+      `momentra-${photoId}.jpg`;
+
+    return new Response(
+      bytes,
+      {
+        status: 200,
+
+        headers: {
+          "Content-Type":
+            contentType,
+
+          "Content-Disposition":
+            `attachment; filename="${fileName.replace(/"/g, "")}"`,
+
+          "Cache-Control":
+            "private, no-store",
+
+          "Access-Control-Allow-Origin":
+            "*",
+
+          "Access-Control-Allow-Headers":
+            "Content-Type, Authorization"
+        }
+      }
+    );
+  } catch {
+    return error(
+      "Gagal memproses file original",
+      500
+    );
+  }
+}
+
+/* =========================================================
+   PHOTO — PUBLIC PREVIEW
+========================================================= */
+
+async function photoPreview(
+  env,
+  request
+) {
+  const url =
+    new URL(request.url);
+
+  const photoId =
+    url.searchParams.get("id");
+
+  if (!photoId) {
+    return error(
+      "Photo ID wajib diisi"
+    );
+  }
+
+  const photo =
+    await env.DB
+      .prepare(`
+        SELECT
+          id,
+          preview_path,
+          image_url,
+          title,
+          content_type
+        FROM photos
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(photoId)
+      .first();
+
+  if (!photo) {
+    return error(
+      "Foto tidak ditemukan",
+      404
+    );
+  }
+
+  /*
+    image_url menjadi prioritas.
+    Jika kosong, gunakan preview_path.
+  */
+
+  const previewUrl =
+    photo.image_url ||
+    (
+      photo.preview_path
+        ? githubRawUrl(
+            env,
+            photo.preview_path
+          )
+        : null
+    );
+
+  if (!previewUrl) {
+    return error(
+      "Preview foto tidak tersedia",
+      404
+    );
+  }
+
+  return ok({
+    photo: {
+      id: photo.id,
+      title: photo.title,
+      image_url: previewUrl,
+      preview_url: previewUrl
+    }
+  });
+}
+
+/* =========================================================
+   ADMIN — GITHUB CONFIG CHECK
+========================================================= */
+
+async function adminGithubConfig(
   request,
   env
 ) {
@@ -2185,607 +3382,938 @@ async function getAdminDashboard(
       env
     );
 
-  if (auth.error) return auth.error;
+  if (auth.error) {
+    return auth.error;
+  }
 
-  const users =
-    await env.DB.prepare(`
-      SELECT COUNT(*) AS total
-      FROM users
-      WHERE role = 'user'
-    `).first();
+  const config =
+    githubConfig(env);
 
-  const photos =
-    await env.DB.prepare(`
-      SELECT COUNT(*) AS total
-      FROM photos
-    `).first();
+  return ok({
+    configured:
+      Boolean(config.token),
 
-  const transactions =
-    await env.DB.prepare(`
-      SELECT COUNT(*) AS total
-      FROM transactions
-    `).first();
+    owner:
+      config.owner,
 
-  const paid =
-    await env.DB.prepare(`
-      SELECT
-        COUNT(*) AS total,
-        COALESCE(
-          SUM(amount),
-          0
-        ) AS revenue
-      FROM transactions
-      WHERE status = 'paid'
-    `).first();
+    repo:
+      config.repo,
 
-  const pending =
-    await env.DB.prepare(`
-      SELECT COUNT(*) AS total
-      FROM transactions
-      WHERE status = 'pending'
-    `).first();
+    branch:
+      config.branch,
 
-  return json({
-    success: true,
-    stats: {
-      users: Number(users?.total || 0),
-      photos: Number(photos?.total || 0),
-      transactions:
-        Number(transactions?.total || 0),
-      paid:
-        Number(paid?.total || 0),
-      revenue:
-        Number(paid?.revenue || 0),
-      pending:
-        Number(pending?.total || 0)
-    }
+    folder:
+      config.folder
   });
 }
 
-// =====================================================
-// CATALOG
-// =====================================================
+/* =========================================================
+   ADMIN — CREATE PHOTO FROM
+   GITHUB UPLOAD RESULT
+========================================================= */
 
-async function getCatalog(env) {
-  const events =
-    await env.DB.prepare(`
-      SELECT *
-      FROM events
-      ORDER BY created_at DESC
-    `).all();
+async function adminGithubPhoto(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
 
-  const cups =
-    await env.DB.prepare(`
-      SELECT *
-      FROM cups
-      ORDER BY created_at DESC
-    `).all();
+  if (auth.error) {
+    return auth.error;
+  }
 
-  const matches =
-    await env.DB.prepare(`
-      SELECT *
-      FROM matches
-      ORDER BY match_date DESC, created_at DESC
-    `).all();
+  let body;
 
-  const photos =
-    await env.DB.prepare(`
-      SELECT
+  try {
+    body =
+      await request.json();
+  } catch {
+    return error(
+      "Invalid JSON"
+    );
+  }
+
+  const path =
+    String(
+      body.path ||
+      ""
+    ).trim();
+
+  const type =
+    String(
+      body.type ||
+      "preview"
+    ).trim();
+
+  if (!path) {
+    return error(
+      "GitHub path wajib diisi"
+    );
+  }
+
+  const config =
+    githubConfig(env);
+
+  /*
+    Pastikan path tetap berada
+    di folder photos.
+  */
+
+  const expectedFolder =
+    config.folder
+      .replace(/^\/+|\/+$/g, "");
+
+  const cleanPath =
+    path.replace(/^\/+/, "");
+
+  if (
+    !cleanPath.startsWith(
+      expectedFolder + "/"
+    )
+  ) {
+    return error(
+      "Path GitHub tidak berada di folder photos",
+      403
+    );
+  }
+
+  return ok({
+    path: cleanPath,
+    type,
+    url:
+      githubRawUrl(
+        env,
+        cleanPath
+      )
+  });
+}
+
+/* =========================================================
+   ADMIN — DELETE USER
+========================================================= */
+
+async function adminDeleteUser(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const userId =
+    url.searchParams.get("id");
+
+  if (!userId) {
+    return error(
+      "User ID wajib diisi"
+    );
+  }
+
+  if (
+    String(userId) ===
+    String(auth.user.id)
+  ) {
+    return error(
+      "Admin yang sedang login tidak dapat dihapus"
+    );
+  }
+
+  await env.DB
+    .prepare(`
+      DELETE FROM users
+      WHERE id = ?
+    `)
+    .bind(userId)
+    .run();
+
+  return ok({
+    message:
+      "User berhasil dihapus"
+  });
+}
+
+/* =========================================================
+   ADMIN — DELETE TRANSACTION
+========================================================= */
+
+async function adminDeleteTransaction(
+  request,
+  env
+) {
+  const auth =
+    await requireAdmin(
+      request,
+      env
+    );
+
+  if (auth.error) {
+    return auth.error;
+  }
+
+  const url =
+    new URL(request.url);
+
+  const transactionId =
+    url.searchParams.get("id");
+
+  if (!transactionId) {
+    return error(
+      "Transaction ID wajib diisi"
+    );
+  }
+
+  await env.DB
+    .prepare(`
+      DELETE FROM transaction_items
+      WHERE transaction_id = ?
+    `)
+    .bind(transactionId)
+    .run();
+
+  await env.DB
+    .prepare(`
+      DELETE FROM transactions
+      WHERE id = ?
+    `)
+    .bind(transactionId)
+    .run();
+
+  return ok({
+    message:
+      "Transaksi berhasil dihapus"
+  });
+}
+
+/* =========================================================
+   ADMIN — ENSURE FIRST ADMIN
+========================================================= */
+
+async function ensureAdmin(env) {
+  /*
+    Jika belum ada user admin dan
+    ADMIN_EMAIL + ADMIN_PASSWORD tersedia,
+    Worker akan membuat admin pertama.
+
+    Gunakan environment variable:
+      ADMIN_EMAIL
+      ADMIN_PASSWORD
+
+    Setelah admin dibuat, password tidak
+    disimpan plaintext.
+  */
+
+  const admin =
+    await env.DB
+      .prepare(`
+        SELECT id
+        FROM users
+        WHERE role = 'admin'
+        LIMIT 1
+      `)
+      .first();
+
+  if (admin) {
+    return;
+  }
+
+  if (
+    !env.ADMIN_EMAIL ||
+    !env.ADMIN_PASSWORD
+  ) {
+    return;
+  }
+
+  const email =
+    String(
+      env.ADMIN_EMAIL
+    )
+      .trim()
+      .toLowerCase();
+
+  const existing =
+    await env.DB
+      .prepare(`
+        SELECT id
+        FROM users
+        WHERE email = ?
+        LIMIT 1
+      `)
+      .bind(email)
+      .first();
+
+  if (existing) {
+    await env.DB
+      .prepare(`
+        UPDATE users
+        SET role = 'admin'
+        WHERE id = ?
+      `)
+      .bind(existing.id)
+      .run();
+
+    return;
+  }
+
+  const passwordHash =
+    await sha256(
+      String(
+        env.ADMIN_PASSWORD
+      )
+    );
+
+  await env.DB
+    .prepare(`
+      INSERT INTO users
+      (
         id,
-        match_id,
-        title,
-        photographer,
-        price,
-        content_type,
-        file_size,
+        name,
+        email,
+        password_hash,
+        role,
         created_at
-      FROM photos
-      ORDER BY created_at DESC
-    `).all();
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      id("usr_"),
+      "Momentra Admin",
+      email,
+      passwordHash,
+      "admin",
+      now()
+    )
+    .run();
+}
 
-  return json({
-    success: true,
-    events:
-      events.results || [],
-    cups:
-      cups.results || [],
-    matches:
-      matches.results || [],
-    photos:
-      photos.results || []
+/* =========================================================
+   ADMIN KEY LOGIN
+========================================================= */
+
+async function adminKeyLogin(
+  request,
+  env
+) {
+  if (!env.ADMIN_KEY) {
+    return error(
+      "ADMIN_KEY belum dikonfigurasi",
+      500
+    );
+  }
+
+  const provided =
+    request.headers.get(
+      "X-Admin-Key"
+    );
+
+  if (!provided) {
+    let body = {};
+
+    try {
+      body =
+        await request.json();
+    } catch {}
+
+    if (
+      body.admin_key ||
+      body.adminKey
+    ) {
+      if (
+        String(
+          body.admin_key ||
+          body.adminKey
+        ) ===
+        String(env.ADMIN_KEY)
+      ) {
+        const admin =
+          await env.DB
+            .prepare(`
+              SELECT
+                id,
+                name,
+                email,
+                role
+              FROM users
+              WHERE role = 'admin'
+              ORDER BY created_at ASC
+              LIMIT 1
+            `)
+            .first();
+
+        if (!admin) {
+          return error(
+            "Admin user belum tersedia",
+            404
+          );
+        }
+
+        const token =
+          await createToken(
+            env,
+            admin
+          );
+
+        return ok({
+          token,
+          user: admin
+        });
+      }
+    }
+
+    return error(
+      "Admin key wajib diisi",
+      401
+    );
+  }
+
+  if (
+    String(provided) !==
+    String(env.ADMIN_KEY)
+  ) {
+    return error(
+      "Admin key salah",
+      401
+    );
+  }
+
+  const admin =
+    await env.DB
+      .prepare(`
+        SELECT
+          id,
+          name,
+          email,
+          role
+        FROM users
+        WHERE role = 'admin'
+        ORDER BY created_at ASC
+        LIMIT 1
+      `)
+      .first();
+
+  if (!admin) {
+    return error(
+      "Admin user belum tersedia",
+      404
+    );
+  }
+
+  const token =
+    await createToken(
+      env,
+      admin
+    );
+
+  return ok({
+    token,
+    user: admin
   });
 }
 
-// =====================================================
-// HEALTH
-// =====================================================
+/* =========================================================
+   ROUTER
+========================================================= */
 
-function health() {
-  return json({
-    success: true,
-    service: "momentra-api",
-    status: "online",
-    payment: "InstanPay"
-  });
+async function router(
+  request,
+  env
+) {
+  const url =
+    new URL(request.url);
+
+  const path =
+    url.pathname.replace(
+      /\/+$/,
+      ""
+    ) || "/";
+
+  const method =
+    request.method.toUpperCase();
+
+  /* -------------------------
+     AUTH
+  ------------------------- */
+
+  if (
+    path === "/api/auth/register" &&
+    method === "POST"
+  ) {
+    return register(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/auth/login" &&
+    method === "POST"
+  ) {
+    return login(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/auth/admin-login" &&
+    method === "POST"
+  ) {
+    return adminKeyLogin(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/auth/me" &&
+    method === "GET"
+  ) {
+    return me(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/auth/logout"
+  ) {
+    return logout();
+  }
+
+  /* -------------------------
+     PUBLIC CATALOG
+  ------------------------- */
+
+  if (
+    path === "/api/events" &&
+    method === "GET"
+  ) {
+    return publicEvents(env);
+  }
+
+  if (
+    path === "/api/event" &&
+    method === "GET"
+  ) {
+    return publicEvent(
+      env,
+      request
+    );
+  }
+
+  if (
+    path === "/api/cups" &&
+    method === "GET"
+  ) {
+    return publicCups(
+      env,
+      request
+    );
+  }
+
+  if (
+    path === "/api/matches" &&
+    method === "GET"
+  ) {
+    return publicMatches(
+      env,
+      request
+    );
+  }
+
+  if (
+    path === "/api/match" &&
+    method === "GET"
+  ) {
+    return publicMatch(
+      env,
+      request
+    );
+  }
+
+  if (
+    path === "/api/photos" &&
+    method === "GET"
+  ) {
+    return publicPhotos(
+      env,
+      request
+    );
+  }
+
+  if (
+    path === "/api/photo/preview" &&
+    method === "GET"
+  ) {
+    return photoPreview(
+      env,
+      request
+    );
+  }
+
+  if (
+    path === "/api/search" &&
+    method === "GET"
+  ) {
+    return searchCatalog(
+      env,
+      request
+    );
+  }
+
+  /* -------------------------
+     USER
+  ------------------------- */
+
+  if (
+    path === "/api/user/profile" &&
+    method === "GET"
+  ) {
+    return userProfile(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/user/transactions" &&
+    method === "GET"
+  ) {
+    return userTransactions(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/user/purchased-photos" &&
+    method === "GET"
+  ) {
+    return purchasedPhotos(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/purchased-photos" &&
+    method === "GET"
+  ) {
+    return purchasedPhotos(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     PAYMENT
+  ------------------------- */
+
+  if (
+    path === "/api/payment/create" &&
+    method === "POST"
+  ) {
+    return createPayment(
+      request,
+      env
+    );
+  }
+
+  if (
+    path.startsWith(
+      "/api/payment/status/"
+    ) &&
+    method === "GET"
+  ) {
+    return paymentStatus(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/payment/webhook" &&
+    method === "POST"
+  ) {
+    return paymentWebhook(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     DOWNLOAD
+  ------------------------- */
+
+  if (
+    path === "/api/photos/download" &&
+    method === "GET"
+  ) {
+    return downloadPhoto(
+      request,
+      env
+    );
+  }
+
+  if (
+    path.startsWith(
+      "/api/photos/"
+    ) &&
+    path.endsWith(
+      "/download"
+    ) &&
+    method === "GET"
+  ) {
+    return downloadPhoto(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     ADMIN DASHBOARD
+  ------------------------- */
+
+  if (
+    path === "/api/admin/dashboard" &&
+    method === "GET"
+  ) {
+    return adminDashboard(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/admin/users" &&
+    method === "GET"
+  ) {
+    return adminUsers(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/admin/users" &&
+    method === "DELETE"
+  ) {
+    return adminDeleteUser(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/admin/transactions" &&
+    method === "GET"
+  ) {
+    return adminTransactions(
+      request,
+      env
+    );
+  }
+
+  if (
+    path === "/api/admin/transactions" &&
+    method === "DELETE"
+  ) {
+    return adminDeleteTransaction(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     ADMIN EVENT
+  ------------------------- */
+
+  if (
+    path === "/api/admin/events"
+  ) {
+    return adminEvents(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     ADMIN CUP
+  ------------------------- */
+
+  if (
+    path === "/api/admin/cups"
+  ) {
+    return adminCups(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     ADMIN MATCH
+  ------------------------- */
+
+  if (
+    path === "/api/admin/matches"
+  ) {
+    return adminMatches(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     ADMIN PHOTO
+  ------------------------- */
+
+  if (
+    path === "/api/admin/photos"
+  ) {
+    return adminPhotos(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     ADMIN PAYMENT
+  ------------------------- */
+
+  if (
+    path ===
+      "/api/admin/payment-config"
+  ) {
+    return adminPaymentConfig(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/payment/test" &&
+    method === "POST"
+  ) {
+    return adminPaymentTest(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     ADMIN GITHUB
+  ------------------------- */
+
+  if (
+    path ===
+      "/api/admin/github-config" &&
+    method === "GET"
+  ) {
+    return adminGithubConfig(
+      request,
+      env
+    );
+  }
+
+  if (
+    path ===
+      "/api/admin/github-photo" &&
+    method === "POST"
+  ) {
+    return adminGithubPhoto(
+      request,
+      env
+    );
+  }
+
+  /* -------------------------
+     HEALTH CHECK
+  ------------------------- */
+
+  if (
+    path === "/" ||
+    path === "/api" ||
+    path === "/api/health"
+  ) {
+    return ok({
+      service: "Momentra API",
+      status: "online",
+      storage: "GitHub",
+      database: "Cloudflare D1",
+      payment: "InstanPay",
+      r2: false,
+      time: now()
+    });
+  }
+
+  return error(
+    "Endpoint tidak ditemukan",
+    404
+  );
 }
 
-// =====================================================
-// MAIN ROUTER
-// =====================================================
+/* =========================================================
+   CLOUDFLARE WORKER ENTRY
+========================================================= */
 
 export default {
-  async fetch(request, env, ctx) {
-    if (request.method === "OPTIONS") {
-      return options();
+  async fetch(
+    request,
+    env,
+    ctx
+  ) {
+    if (
+      request.method ===
+      "OPTIONS"
+    ) {
+      return new Response(
+        null,
+        {
+          status: 204,
+          headers: JSON_HEADERS
+        }
+      );
     }
 
     try {
-      await initDatabase(env);
-
-      const url =
-        new URL(request.url);
-
-      const path =
-        url.pathname;
-
-      const method =
-        request.method;
-
-      // -------------------------------
-      // HEALTH
-      // -------------------------------
-
-      if (
-        path === "/" &&
-        method === "GET"
-      ) {
-        return health();
-      }
-
-      // -------------------------------
-      // AUTH
-      // -------------------------------
-
-      if (
-        path === "/api/auth/register" &&
-        method === "POST"
-      ) {
-        return await registerUser(
-          request,
-          env
-        );
-      }
-
-      if (
-        path === "/api/auth/login" &&
-        method === "POST"
-      ) {
-        return await loginUser(
-          request,
-          env
-        );
-      }
-
-      if (
-        path === "/api/auth/logout" &&
-        method === "POST"
-      ) {
-        return await logoutUser(
-          request,
-          env
-        );
-      }
-
-      if (
-        path === "/api/auth/me" &&
-        method === "GET"
-      ) {
-        const auth =
-          await requireAuth(
-            request,
-            env
-          );
-
-        if (auth.error)
-          return auth.error;
-
-        return json({
-          success: true,
-          user: auth.user
-        });
-      }
-
-      // -------------------------------
-      // PUBLIC CATALOG
-      // -------------------------------
-
-      if (
-        path === "/api/catalog" &&
-        method === "GET"
-      ) {
-        return await getCatalog(env);
-      }
-
-      if (
-        path === "/api/events" &&
-        method === "GET"
-      ) {
-        return await getEvents(env);
-      }
-
-      if (
-        path === "/api/cups" &&
-        method === "GET"
-      ) {
-        return await getCups(
-          env,
-          url.searchParams.get("event_id")
-        );
-      }
-
-      if (
-        path === "/api/matches" &&
-        method === "GET"
-      ) {
-        return await getMatches(
-          env,
-          url.searchParams.get("cup_id")
-        );
-      }
-
-      if (
-        path === "/api/photos" &&
-        method === "GET"
-      ) {
-        return await getPhotos(
-          env,
-          url.searchParams.get("match_id")
-        );
-      }
-
-      // -------------------------------
-      // PHOTO FILE
-      // -------------------------------
-
-      const photoFileMatch =
-        path.match(
-          /^\/api\/photos\/([^/]+)\/file$/
-        );
-
-      if (
-        photoFileMatch &&
-        method === "GET"
-      ) {
-        return await getPhotoFile(
-          decodeURIComponent(
-            photoFileMatch[1]
-          ),
-          env
-        );
-      }
-
-      // -------------------------------
-      // ADMIN USERS
-      // -------------------------------
-
-      if (
-        path === "/api/admin/users" &&
-        method === "GET"
-      ) {
-        const auth =
-          await requireAdmin(
-            request,
-            env
-          );
-
-        if (auth.error)
-          return auth.error;
-
-        return await getAdminUsers(env);
-      }
-
-      // -------------------------------
-      // ADMIN DASHBOARD
-      // -------------------------------
-
-      if (
-        path === "/api/admin/dashboard" &&
-        method === "GET"
-      ) {
-        return await getAdminDashboard(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // ADMIN EVENTS
-      // -------------------------------
-
-      if (
-        path === "/api/admin/events" &&
-        method === "POST"
-      ) {
-        const auth =
-          await requireAdmin(
-            request,
-            env
-          );
-
-        if (auth.error)
-          return auth.error;
-
-        return await createEvent(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // ADMIN CUPS
-      // -------------------------------
-
-      if (
-        path === "/api/admin/cups" &&
-        method === "POST"
-      ) {
-        const auth =
-          await requireAdmin(
-            request,
-            env
-          );
-
-        if (auth.error)
-          return auth.error;
-
-        return await createCup(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // ADMIN MATCHES
-      // -------------------------------
-
-      if (
-        path === "/api/admin/matches" &&
-        method === "POST"
-      ) {
-        const auth =
-          await requireAdmin(
-            request,
-            env
-          );
-
-        if (auth.error)
-          return auth.error;
-
-        return await createMatch(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // ADMIN PHOTO UPLOAD
-      // -------------------------------
-
-      if (
-        path === "/api/admin/photos" &&
-        method === "POST"
-      ) {
-        const auth =
-          await requireAdmin(
-            request,
-            env
-          );
-
-        if (auth.error)
-          return auth.error;
-
-        return await uploadPhotos(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // ADMIN PHOTO DELETE
-      // -------------------------------
-
-      const deletePhotoMatch =
-        path.match(
-          /^\/api\/admin\/photos\/([^/]+)$/
-        );
-
-      if (
-        deletePhotoMatch &&
-        method === "DELETE"
-      ) {
-        const auth =
-          await requireAdmin(
-            request,
-            env
-          );
-
-        if (auth.error)
-          return auth.error;
-
-        return await deletePhoto(
-          decodeURIComponent(
-            deletePhotoMatch[1]
-          ),
-          env
-        );
-      }
-
-      // -------------------------------
-      // USER CREATE PAYMENT
-      // -------------------------------
-
-      if (
-        path === "/api/payment/create" &&
-        method === "POST"
-      ) {
-        return await createPayment(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // PAYMENT STATUS
-      // -------------------------------
-
-      const paymentStatusMatch =
-        path.match(
-          /^\/api\/payment\/status\/([^/]+)$/
-        );
-
-      if (
-        paymentStatusMatch &&
-        method === "GET"
-      ) {
-        return await getPaymentStatus(
-          decodeURIComponent(
-            paymentStatusMatch[1]
-          ),
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // PAYMENT WEBHOOK
-      // -------------------------------
-
-      if (
-        path === "/api/payment/webhook" &&
-        method === "POST"
-      ) {
-        return await paymentWebhook(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // SANDBOX SIMULATION
-      // -------------------------------
-
-      const sandboxMatch =
-        path.match(
-          /^\/api\/payment\/sandbox\/([^/]+)$/
-        );
-
-      if (
-        sandboxMatch &&
-        method === "POST"
-      ) {
-        return await simulateSandboxPayment(
-          decodeURIComponent(
-            sandboxMatch[1]
-          ),
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // USER TRANSACTIONS
-      // -------------------------------
-
-      if (
-        path === "/api/transactions" &&
-        method === "GET"
-      ) {
-        return await getUserTransactions(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // PURCHASED PHOTOS
-      // -------------------------------
-
-      if (
-        path === "/api/purchased-photos" &&
-        method === "GET"
-      ) {
-        return await getPurchasedPhotos(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // ADMIN TRANSACTIONS
-      // -------------------------------
-
-      if (
-        path === "/api/admin/transactions" &&
-        method === "GET"
-      ) {
-        return await getAdminTransactions(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // PAYMENT CONFIG
-      // -------------------------------
-
-      if (
-        path === "/api/admin/payment-config" &&
-        method === "GET"
-      ) {
-        return await getPaymentConfig(
-          request,
-          env
-        );
-      }
-
-      if (
-        path === "/api/admin/payment/test" &&
-        method === "POST"
-      ) {
-        return await testPaymentConnection(
-          request,
-          env
-        );
-      }
-
-      // -------------------------------
-      // NOT FOUND
-      // -------------------------------
-
-      return json(
-        {
-          success: false,
-          message: "Endpoint tidak ditemukan."
-        },
-        404
+      await ensureSchema(env);
+
+      /*
+        Membuat admin pertama jika
+        ADMIN_EMAIL dan ADMIN_PASSWORD
+        tersedia di Worker secrets.
+      */
+      await ensureAdmin(env);
+
+      return await router(
+        request,
+        env
       );
-
-    } catch (error) {
+    } catch (err) {
       console.error(
-        "Momentra Worker Error:",
-        error
+        "MOMENTRA WORKER ERROR:",
+        err
       );
 
-      return json(
-        {
-          success: false,
-          message:
-            "Terjadi kesalahan pada server.",
-          error:
-            error?.message || "Unknown error"
-        },
-        500
-      );
+      return json({
+        success: false,
+        error:
+          err?.message ||
+          "Internal Server Error"
+      }, 500);
     }
   }
 };
