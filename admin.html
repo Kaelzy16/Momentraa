@@ -4387,7 +4387,135 @@ async function uploadToGitHub(
    SAVE MOMENT
 ========================================================= */
 
+
+async function ensureAdminToken(){
+
+  let token =
+    localStorage.getItem("momentra_token");
+
+  if(token){
+    try{
+
+      const check =
+        await fetch(
+          API_BASE + "/api/auth/me",
+          {
+            headers:{
+              "Authorization":
+                "Bearer " + token
+            }
+          }
+        );
+
+      if(check.ok){
+
+        const data =
+          await check.json();
+
+        const user =
+          data.user ||
+          data.data?.user ||
+          null;
+
+        if(
+          user &&
+          user.role === "admin"
+        ){
+          return token;
+        }
+      }
+
+    }catch(e){}
+  }
+
+  const adminKey =
+    prompt("Masukkan Admin Key:");
+
+  if(!adminKey){
+    throw new Error(
+      "Admin Key diperlukan."
+    );
+  }
+
+  const response =
+    await fetch(
+      API_BASE +
+      "/api/auth/admin-login",
+      {
+        method:"POST",
+
+        headers:{
+          "Content-Type":
+            "application/json"
+        },
+
+        body:JSON.stringify({
+          admin_key:adminKey
+        })
+      }
+    );
+
+  const data =
+    await response
+      .json()
+      .catch(() => ({}));
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      data.message ||
+      `HTTP ${response.status}`
+    );
+  }
+
+  const newToken =
+    data.token ||
+    data.access_token ||
+    data.accessToken;
+
+  if(!newToken){
+    throw new Error(
+      "Token admin tidak diterima."
+    );
+  }
+
+  localStorage.setItem(
+    "momentra_token",
+    newToken
+  );
+
+  if(data.user){
+    localStorage.setItem(
+      "momentra_user",
+      JSON.stringify(data.user)
+    );
+  }
+
+  localStorage.setItem(
+    "momentra_logged_in",
+    "true"
+  );
+
+  return newToken;
+}
+
+
 async function saveMoment(){
+
+  try{
+    await ensureAdminToken();
+  }catch(error){
+
+    showAlert(
+      error.message ||
+      "Autentikasi admin gagal.",
+      "error"
+    );
+
+    return;
+  }
+
+
 
   const button =
     document.getElementById(
