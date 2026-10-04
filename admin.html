@@ -4373,9 +4373,8 @@ async function uploadToGitHub(
   if(!response.ok){
 
     throw new Error(
-      data.message ||
-      "Upload ke GitHub gagal. HTTP " +
-      response.status
+      "GitHub HTTP " + response.status + ": " +
+      (data.message || "Upload ke GitHub gagal")
     );
 
   }
@@ -5528,8 +5527,8 @@ async function testGithubConfig(){
     if(!response.ok){
 
       throw new Error(
-        data?.message ||
-        `GitHub HTTP ${response.status}`
+        `GitHub HTTP ${response.status}: ` +
+        (data?.message || "Upload ke GitHub gagal")
       );
 
     }
