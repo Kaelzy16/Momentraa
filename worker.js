@@ -1153,7 +1153,7 @@ async function adminPhotos(request, env) {
       .prepare(`
         SELECT
           p.*,
-          m.match_name,
+          m.name AS match_name,
           m.team_a,
           m.team_b,
           c.name AS cup_name,
@@ -1183,11 +1183,11 @@ async function adminPhotos(request, env) {
       return error("Invalid JSON");
     }
 
-    const matchId = String(
+    const matchId = Number(
       body.match_id ||
       body.matchId ||
-      ""
-    ).trim();
+      0
+    );
 
     const title = String(
       body.title || ""
@@ -1219,25 +1219,7 @@ async function adminPhotos(request, env) {
       ""
     ).trim();
 
-    const fileName = String(
-      body.file_name ||
-      body.fileName ||
-      ""
-    ).trim();
-
-    const contentType = String(
-      body.content_type ||
-      body.contentType ||
-      "image/jpeg"
-    ).trim();
-
-    const fileSize = Number(
-      body.file_size ||
-      body.fileSize ||
-      0
-    );
-
-    if (!matchId) {
+    if (!Number.isInteger(matchId) || matchId <= 0) {
       return error(
         "Match wajib dipilih"
       );
@@ -1255,8 +1237,7 @@ async function adminPhotos(request, env) {
       );
     }
 
-    if (!Number.isFinite(price) ||
-        price < 0) {
+    if (!Number.isFinite(price) || price < 0) {
       return error(
         "Harga tidak valid"
       );
@@ -1279,39 +1260,34 @@ async function adminPhotos(request, env) {
       );
     }
 
-    const photoId = id("photo_");
+    /*
+      photos.id adalah INTEGER AUTOINCREMENT,
+      jadi jangan gunakan id("photo_").
+    */
 
-    await env.DB
+    const result = await env.DB
       .prepare(`
         INSERT INTO photos
         (
-          id,
           match_id,
           title,
           photographer,
           price,
           r2_key,
-          file_name,
-          content_type,
-          file_size,
           image_url,
           original_path,
           preview_path,
           created_at
         )
         VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
-        photoId,
         matchId,
         title,
         photographer,
         Math.round(price),
         originalPath,
-        fileName,
-        contentType,
-        fileSize,
         imageUrl,
         originalPath,
         previewPath,
@@ -1319,10 +1295,11 @@ async function adminPhotos(request, env) {
       )
       .run();
 
+    const photoId = result.meta?.last_row_id || null;
+
     return json({
       success: true,
-      message:
-        "Foto berhasil ditambahkan",
+      message: "Foto berhasil ditambahkan",
       photo: {
         id: photoId,
         match_id: matchId,
@@ -1348,37 +1325,32 @@ async function adminPhotos(request, env) {
       );
     }
 
-    await env.DB
+    const result = await env.DB
       .prepare(`
         DELETE FROM photos
         WHERE id = ?
       `)
-      .bind(photoId)
+      .bind(Number(photoId))
       .run();
 
-    await env.DB
-      .prepare(`
-        DELETE FROM transaction_items
-        WHERE photo_id = ?
-      `)
-      .bind(photoId)
-      .run();
+    if (!result.meta?.changes) {
+      return error(
+        "Foto tidak ditemukan",
+        404
+      );
+    }
 
     return ok({
-      message:
-        "Foto berhasil dihapus"
+      success: true,
+      message: "Foto berhasil dihapus"
     });
   }
 
   return error(
-    "Method not allowed",
+    "Method tidak diizinkan",
     405
   );
 }
-
-/* =========================================================
-   PUBLIC CATALOG — EVENTS
-========================================================= */
 
 async function publicEvents(env) {
   const result = await env.DB
