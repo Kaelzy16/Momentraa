@@ -4431,9 +4431,9 @@ async function ensureAdminToken(){
   const adminKey =
     prompt("Masukkan Admin Key:");
 
-  if(!adminKey){
+  if(adminKey === null || !adminKey.trim()){
     throw new Error(
-      "Admin Key diperlukan."
+      "Admin Key harus diisi."
     );
   }
 
@@ -4446,12 +4446,10 @@ async function ensureAdminToken(){
 
         headers:{
           "Content-Type":
-            "application/json"
-        },
-
-        body:JSON.stringify({
-          admin_key:adminKey
-        })
+            "application/json",
+          "X-Admin-Key":
+            adminKey.trim()
+        }
       }
     );
 
