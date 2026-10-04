@@ -2516,24 +2516,6 @@ async function api(path,options={}){
 
   }
 
-  /*
-    GitHub Token hanya ditambahkan ketika
-    memang tersedia.
-
-    Worker harus membaca:
-    X-GitHub-Token
-  */
-
-  const githubToken =
-    getGithubToken();
-
-  if(githubToken){
-
-    headers["X-GitHub-Token"] =
-      githubToken;
-
-  }
-
   const response =
     await fetch(
       API_BASE + path,
