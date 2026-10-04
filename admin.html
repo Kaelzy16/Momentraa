@@ -4261,6 +4261,151 @@ document
    SAVE MOMENT
 ========================================================= */
 
+async function uploadToGitHub(
+  file,
+  path,
+  message
+){
+
+  const owner =
+    document.getElementById("githubOwner")?.value.trim() ||
+    localStorage.getItem("momentra_github_owner") ||
+    "Kaelzy16";
+
+  const repo =
+    document.getElementById("githubRepo")?.value.trim() ||
+    localStorage.getItem("momentra_github_repo") ||
+    "Momentraa";
+
+  const branch =
+    document.getElementById("githubBranch")?.value.trim() ||
+    localStorage.getItem("momentra_github_branch") ||
+    "main";
+
+  const token =
+    getGithubToken();
+
+  if(!token){
+    throw new Error(
+      "GitHub Token belum diisi."
+    );
+  }
+
+  if(!owner || !repo || !branch){
+    throw new Error(
+      "GitHub configuration belum lengkap."
+    );
+  }
+
+  const buffer =
+    await file.arrayBuffer();
+
+  const bytes =
+    new Uint8Array(buffer);
+
+  let binary = "";
+
+  const chunkSize = 0x8000;
+
+  for(
+    let i = 0;
+    i < bytes.length;
+    i += chunkSize
+  ){
+
+    binary += String.fromCharCode(
+      ...bytes.subarray(
+        i,
+        Math.min(
+          i + chunkSize,
+          bytes.length
+        )
+      )
+    );
+
+  }
+
+  const content =
+    btoa(binary);
+
+  const cleanPath =
+    path
+      .split("/")
+      .map(
+        part =>
+          encodeURIComponent(part)
+      )
+      .join("/");
+
+  const endpoint =
+    "https://api.github.com/repos/" +
+    encodeURIComponent(owner) +
+    "/" +
+    encodeURIComponent(repo) +
+    "/contents/" +
+    cleanPath;
+
+  const response =
+    await fetch(
+      endpoint,
+      {
+        method: "PUT",
+
+        headers: {
+
+          "Authorization":
+            "Bearer " + token,
+
+          "Accept":
+            "application/vnd.github+json",
+
+          "X-GitHub-Api-Version":
+            "2022-11-28",
+
+          "Content-Type":
+            "application/json"
+
+        },
+
+        body:
+          JSON.stringify({
+
+            message,
+
+            content,
+
+            branch
+
+          })
+
+      }
+    );
+
+  const data =
+    await response
+      .json()
+      .catch(
+        () => ({})
+      );
+
+  if(!response.ok){
+
+    throw new Error(
+      data.message ||
+      "Upload ke GitHub gagal. HTTP " +
+      response.status
+    );
+
+  }
+
+  return data;
+}
+
+
+/* =========================================================
+   SAVE MOMENT
+========================================================= */
+
 async function saveMoment(){
 
   const button =
@@ -4293,7 +4438,6 @@ async function saveMoment(){
     );
 
     return;
-
   }
 
   if(!selectedPhotoFile){
@@ -4304,7 +4448,6 @@ async function saveMoment(){
     );
 
     return;
-
   }
 
   if(!watermarkedPhotoFile){
@@ -4315,7 +4458,6 @@ async function saveMoment(){
     );
 
     return;
-
   }
 
   if(
@@ -4329,7 +4471,6 @@ async function saveMoment(){
     );
 
     return;
-
   }
 
   try{
@@ -4339,6 +4480,11 @@ async function saveMoment(){
 
     button.textContent =
       "Menyimpan...";
+
+
+    /* =====================================================
+       1. BUAT EVENT
+    ===================================================== */
 
     const event =
       await createEvent();
@@ -4353,6 +4499,11 @@ async function saveMoment(){
       );
 
     }
+
+
+    /* =====================================================
+       2. BUAT CUP
+    ===================================================== */
 
     const cup =
       await createCup(
@@ -4370,6 +4521,11 @@ async function saveMoment(){
 
     }
 
+
+    /* =====================================================
+       3. BUAT MATCH
+    ===================================================== */
+
     const match =
       await createMatch(
         currentCupId
@@ -4386,79 +4542,292 @@ async function saveMoment(){
 
     }
 
-    const form =
-      new FormData();
 
-    /*
-      ORIGINAL:
-      File asli tanpa watermark.
-    */
+    /* =====================================================
+       4. GITHUB CONFIG
+    ===================================================== */
 
-    form.append(
-      "original_file",
-      selectedPhotoFile,
+    const owner =
+      document
+        .getElementById(
+          "githubOwner"
+        )
+        ?.value.trim() ||
+      localStorage.getItem(
+        "momentra_github_owner"
+      ) ||
+      "Kaelzy16";
+
+    const repo =
+      document
+        .getElementById(
+          "githubRepo"
+        )
+        ?.value.trim() ||
+      localStorage.getItem(
+        "momentra_github_repo"
+      ) ||
+      "Momentraa";
+
+    const branch =
+      document
+        .getElementById(
+          "githubBranch"
+        )
+        ?.value.trim() ||
+      localStorage.getItem(
+        "momentra_github_branch"
+      ) ||
+      "main";
+
+    const folder =
+      document
+        .getElementById(
+          "githubFolder"
+        )
+        ?.value.trim() ||
+      localStorage.getItem(
+        "momentra_github_folder"
+      ) ||
+      "photos";
+
+
+    if(!owner || !repo || !branch){
+
+      throw new Error(
+        "GitHub configuration belum lengkap."
+      );
+
+    }
+
+
+    /* =====================================================
+       5. BUAT NAMA FILE
+    ===================================================== */
+
+    const originalName =
       selectedPhotoFile.name
+        .replace(
+          /\.[^/.]+$/,
+          ""
+        )
+        .replace(
+          /[^a-zA-Z0-9_-]+/g,
+          "-"
+        )
+        .replace(
+          /^-+|-+$/g,
+          ""
+        ) ||
+      "photo";
+
+    const extension =
+      (
+        selectedPhotoFile.name
+          .split(".")
+          .pop() ||
+        "jpg"
+      )
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]/g,
+        ""
+      );
+
+    const unique =
+      Date.now() +
+      "-" +
+      Math.random()
+        .toString(36)
+        .slice(2,8);
+
+    const originalPath =
+      folder +
+      "/original/" +
+      originalName +
+      "-" +
+      unique +
+      "." +
+      extension;
+
+    const previewPath =
+      folder +
+      "/preview/" +
+      originalName +
+      "-" +
+      unique +
+      "." +
+      extension;
+
+
+    /* =====================================================
+       6. UPLOAD FOTO ASLI
+    ===================================================== */
+
+    const status =
+      document.getElementById(
+        "photoStatus"
+      );
+
+    if(status){
+
+      status.textContent =
+        "Upload foto asli ke GitHub...";
+
+    }
+
+    await uploadToGitHub(
+      selectedPhotoFile,
+      originalPath,
+      "Add original Momentra photo " +
+      originalName
     );
 
-    /*
-      PREVIEW:
-      File yang sudah diberi watermark.
-    */
 
-    form.append(
-      "preview_file",
+    /* =====================================================
+       7. UPLOAD FOTO WATERMARK
+    ===================================================== */
+
+    if(status){
+
+      status.textContent =
+        "Upload preview watermark ke GitHub...";
+
+    }
+
+    await uploadToGitHub(
       watermarkedPhotoFile,
-      watermarkedPhotoFile.name
+      previewPath,
+      "Add preview Momentra photo " +
+      originalName
     );
 
-    form.append(
-      "match_id",
-      currentMatchId
-    );
 
-    form.append(
-      "title",
-      `${
-        document
-          .getElementById(
-            "teamA"
-          )
-          .value.trim()
-      } vs ${
-        document
-          .getElementById(
-            "teamB"
-          )
-          .value.trim()
-      }`
-    );
+    /* =====================================================
+       8. URL PREVIEW
+    ===================================================== */
 
-    form.append(
-      "photographer",
-      photographer
-    );
+    const previewUrl =
+      "https://raw.githubusercontent.com/" +
+      owner +
+      "/" +
+      repo +
+      "/" +
+      branch +
+      "/" +
+      previewPath;
 
-    form.append(
-      "price",
-      String(price)
-    );
 
-    /*
-      X-GitHub-Token otomatis
-      ditambahkan oleh api().
-    */
+    /* =====================================================
+       9. SIMPAN METADATA KE WORKER
+    ===================================================== */
 
-    const result =
-      await api(
+    if(status){
+
+      status.textContent =
+        "Menyimpan metadata foto...";
+
+    }
+
+    const response =
+      await fetch(
+        API_BASE +
         "/api/admin/photos",
         {
-          method:"POST",
-          body:form
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            "Authorization":
+              "Bearer " +
+              localStorage.getItem(
+                "momentra_token"
+              )
+          },
+
+          body:
+            JSON.stringify({
+
+              match_id:
+                Number(
+                  currentMatchId
+                ),
+
+              title:
+                (
+                  document
+                    .getElementById(
+                      "teamA"
+                    )
+                    .value.trim() +
+                  " vs " +
+                  document
+                    .getElementById(
+                      "teamB"
+                    )
+                    .value.trim()
+                ),
+
+              photographer,
+
+              price,
+
+              original_path:
+                originalPath,
+
+              preview_path:
+                previewPath,
+
+              image_url:
+                previewUrl,
+
+              file_name:
+                selectedPhotoFile.name,
+
+              content_type:
+                selectedPhotoFile.type ||
+                "image/jpeg",
+
+              file_size:
+                selectedPhotoFile.size
+
+            })
         }
       );
 
+    const result =
+      await response
+        .json()
+        .catch(
+          () => ({})
+        );
+
+    if(!response.ok){
+
+      throw new Error(
+        result.error ||
+        result.message ||
+        "Gagal menyimpan metadata foto. HTTP " +
+        response.status
+      );
+
+    }
+
+
+    /* =====================================================
+       10. SELESAI
+    ===================================================== */
+
+    if(status){
+
+      status.textContent =
+        "Moment berhasil dibuat.";
+
+    }
+
     showAlert(
-      result?.message ||
       "Momen berhasil disimpan."
     );
 
@@ -4471,6 +4840,19 @@ async function saveMoment(){
     console.error(
       error
     );
+
+    const status =
+      document.getElementById(
+        "photoStatus"
+      );
+
+    if(status){
+
+      status.textContent =
+        "Gagal: " +
+        error.message;
+
+    }
 
     showAlert(
       error.message ||
