@@ -2271,7 +2271,7 @@ select option{
 ========================================================= */
 
 const API_BASE =
-  "https://momentra-api.christopoluan841.workers.dev";
+  "https://momentra.christopoluan841.workers.dev";
 
 let users = [];
 let transactions = [];
@@ -2285,7 +2285,21 @@ let watermarkedPhotoFile = null;
 
 let previewObjectUrl = null;
 
+let users = [];
+let transactions = [];
 
+let currentEventId = null;
+let currentCupId = null;
+let currentMatchId = null;
+
+let selectedPhotoFile = null;
+let watermarkedPhotoFile = null;
+
+let previewObjectUrl = null;
+
+/* =========================================================
+   BASIC HELPERS
+========================================================= */
 /* =========================================================
    BASIC HELPERS
 ========================================================= */
